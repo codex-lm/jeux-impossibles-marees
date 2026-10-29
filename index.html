@@ -1,0 +1,2146 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MARÉES — Un Go mouvant sur un archipel qui coule</title>
+<style>
+  :root {
+    --azur: #6ec8ff;    /* pierres Azur — inchangé */
+    --corail: #ff9166;  /* pierres Corail — inchangé */
+    --or: #f2e3c2;      /* sable clair — textes secondaires */
+    --fond: #0a323c;    /* turquoise très sombre */
+    --accent: #35d0c5;  /* turquoise — titres, boutons, éléments actifs */
+    --ecume: #9fe8e0;   /* écume des côtes */
+    --bord: #1d5a66;    /* bord des panneaux */
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--fond);
+    color: var(--or);
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+    overflow: hidden;
+  }
+
+  /* ---------- En-tête ---------- */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap;
+    padding: 12px 26px 10px;
+  }
+  h1 {
+    font-family: Georgia, "Times New Roman", serif;
+    font-weight: 400;
+    font-size: clamp(22px, 3vw, 36px);
+    letter-spacing: .42em;
+    margin: 0;
+    color: var(--accent);
+    text-shadow: 0 0 18px rgba(53, 208, 197, .3);
+  }
+  .sous-titre {
+    margin: 3px 0 0;
+    font-style: italic;
+    color: var(--or);
+    opacity: .8;
+    font-size: clamp(11px, 1.3vw, 15px);
+    letter-spacing: .04em;
+  }
+  .actions { display: flex; gap: 10px; }
+  button {
+    font: inherit;
+    background: rgba(53, 208, 197, .07);
+    border: 1px solid rgba(53, 208, 197, .45);
+    color: var(--or);
+    padding: 8px 18px;
+    border-radius: 7px;
+    cursor: pointer;
+    letter-spacing: .08em;
+    transition: background .18s, border-color .18s;
+  }
+  button:hover { background: rgba(53, 208, 197, .16); border-color: rgba(53, 208, 197, .85); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---------- Barre d'état ---------- */
+  #statut {
+    display: flex; align-items: stretch;
+    border-top: 1px solid var(--bord);
+    border-bottom: 1px solid var(--bord);
+    background: rgba(14, 63, 74, .35);
+  }
+  .joueur {
+    flex: 1; padding: 8px 16px 7px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  #panneau-azur { border-right: 1px solid rgba(159, 232, 224, .1); }
+  #panneau-corail { border-left: 1px solid rgba(159, 232, 224, .1); align-items: flex-end; text-align: right; }
+  .joueur .nom { letter-spacing: .3em; font-size: 12px; }
+  #panneau-azur .nom { color: var(--azur); }
+  #panneau-corail .nom { color: var(--corail); }
+  #panneau-azur.actif { box-shadow: inset 0 0 0 1px rgba(110, 200, 255, .55); background: rgba(110, 200, 255, .08); }
+  #panneau-corail.actif { box-shadow: inset 0 0 0 1px rgba(255, 145, 102, .55); background: rgba(255, 145, 102, .08); }
+  .pastilles { display: flex; gap: 4px; min-height: 11px; }
+  #panneau-corail .pastilles { justify-content: flex-end; }
+  .pastille {
+    width: 11px; height: 11px; border-radius: 50%;
+    box-shadow: inset 0 -2px 3px rgba(0, 0, 0, .35), 0 0 6px rgba(255, 255, 255, .12);
+  }
+  .pastille.azur { background: var(--azur); }
+  .pastille.corail { background: var(--corail); }
+  .pastille.utilisee { opacity: .16; box-shadow: none; }
+  .info { font-size: 11.5px; opacity: .75; }
+  .centre {
+    flex: 1.35; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 3px;
+    padding: 6px 10px; text-align: center;
+  }
+  #demi-tour { font-size: 13.5px; letter-spacing: .06em; }
+  #ligne-maree { display: flex; align-items: center; gap: 7px; font-size: 12.5px; }
+  #texte-maree.imminent { color: var(--corail); font-weight: 600; }
+  #compte-marees { font-size: 11px; opacity: .6; }
+  #canvas-vague { display: block; }
+
+  /* ---------- Plateau ---------- */
+  main#zone-plateau { position: relative; flex: 1; min-height: 0; }
+  #plateau { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* ---------- Légende ---------- */
+  #legende {
+    padding: 6px 16px; text-align: center;
+    font-size: 11px; color: rgba(242, 227, 194, .55);
+    border-top: 1px solid rgba(159, 232, 224, .1);
+  }
+  #legende .sep { margin: 0 8px; opacity: .5; }
+
+  /* ---------- Toasts ---------- */
+  #toasts {
+    position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    z-index: 50; pointer-events: none;
+  }
+  .toast {
+    background: rgba(10, 50, 60, .94);
+    border: 1px solid rgba(29, 90, 102, .9);
+    border-left: 3px solid var(--accent);
+    color: var(--or);
+    padding: 9px 16px; border-radius: 8px; font-size: 13px;
+    max-width: min(80vw, 560px);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, .5);
+    animation: toast-in .22s ease, toast-out .5s ease 2.4s forwards;
+  }
+  .toast.maree { border-left-color: var(--ecume); }
+  .toast.capture { border-left-color: var(--corail); }
+  .toast.avertissement { border-left-color: #d94f4f; }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes toast-out { to { opacity: 0; transform: translateY(-6px); } }
+
+  /* ---------- Voiles (règles / fin) ---------- */
+  .voile {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(4, 24, 30, .8);
+    display: none; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .voile.visible { display: flex; }
+  .panneau {
+    position: relative;
+    background: #0a323c;
+    border: 1px solid var(--bord);
+    border-radius: 14px;
+    padding: 26px 32px 22px;
+    max-width: 660px; width: 100%;
+    max-height: 84vh; overflow: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .6);
+  }
+  .panneau h2 {
+    font-family: Georgia, "Times New Roman", serif;
+    font-weight: 400; letter-spacing: .14em;
+    margin: 0 0 12px; color: var(--accent); font-size: 24px;
+  }
+  .panneau h3 {
+    color: var(--ecume); font-size: 13px; letter-spacing: .1em;
+    margin: 15px 0 4px; text-transform: uppercase;
+  }
+  .panneau p, .panneau li { font-size: 13.5px; line-height: 1.55; color: rgba(242, 227, 194, .88); margin: 4px 0; }
+  .panneau ul { margin: 4px 0; padding-left: 20px; }
+  .pourquoi {
+    margin-top: 18px; padding: 10px 14px;
+    border: 1px solid rgba(159, 232, 224, .28); border-radius: 8px;
+    font-style: italic; background: rgba(159, 232, 224, .06);
+  }
+  .fermer {
+    position: absolute; top: 10px; right: 10px;
+    padding: 4px 10px; font-size: 14px; line-height: 1.3;
+  }
+  .pied { margin-top: 18px; text-align: right; }
+  .panneau.fin { max-width: 500px; text-align: center; }
+  .titre-fin { font-size: 32px; letter-spacing: .22em; margin: 6px 0 10px; }
+  .titre-fin.azur { color: var(--azur); }
+  .titre-fin.corail { color: var(--corail); }
+  .titre-fin.or { color: var(--or); }
+  #fin-phrase { margin-bottom: 8px; }
+  #fin-score { font-size: 16px; margin: 6px 0 2px; }
+  #btn-rejouer { margin-top: 14px; padding: 10px 26px; font-size: 14px; letter-spacing: .1em; }
+
+  /* ---------- Écran d'accueil ---------- */
+  .panneau.accueil { max-width: 440px; text-align: center; }
+  .panneau.accueil h2 { font-size: 34px; letter-spacing: .4em; margin-bottom: 2px; }
+  .sous-titre-accueil { margin: 0 0 4px; font-style: italic; opacity: .8; font-size: 13.5px; }
+  .menu-accueil { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+  .menu-accueil[hidden] { display: none; }
+  .menu-accueil .choix {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 13px 16px; font-size: 15px; letter-spacing: .05em; border-radius: 10px;
+  }
+  .menu-accueil .choix .precis { font-size: 11px; opacity: .6; font-style: italic; letter-spacing: .02em; }
+  .sous-choix { padding: 6px 14px; font-size: 12px; }
+  .menu-accueil .sous-choix { align-self: center; }
+  .accueil-regles { margin-top: 14px; }
+  #accueil-file-statut { margin: 6px 0 0; font-size: 13.5px; }
+  #accueil-note { margin-top: 16px; font-size: 12px; font-style: italic; opacity: .65; min-height: 15px; }
+
+  @media (max-width: 720px) {
+    #statut { flex-direction: column; }
+    #panneau-azur { border-right: none; border-bottom: 1px solid rgba(159, 232, 224, .1); }
+    #panneau-corail { border-left: none; border-top: 1px solid rgba(159, 232, 224, .1); }
+    header { padding: 10px 14px 8px; }
+    #legende { font-size: 10px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="titre-bloc">
+    <h1>MARÉES</h1>
+    <p class="sous-titre">Un Go mouvant sur un archipel qui coule</p>
+  </div>
+  <nav class="actions">
+    <button id="btn-nouvelle" type="button">Nouvelle partie</button>
+    <button id="btn-quitter" type="button" hidden>Quitter le salon</button>
+    <button id="btn-regles" type="button">Règles</button>
+  </nav>
+</header>
+
+<div id="statut">
+  <div class="joueur" id="panneau-azur">
+    <div class="nom">AZUR</div>
+    <div class="pastilles" id="reserve-azur"></div>
+    <div class="info" id="info-azur"></div>
+  </div>
+  <div class="centre">
+    <div id="demi-tour"></div>
+    <div id="ligne-maree">
+      <canvas id="canvas-vague" width="34" height="16" aria-hidden="true"></canvas>
+      <span id="texte-maree"></span>
+    </div>
+    <div id="compte-marees"></div>
+  </div>
+  <div class="joueur" id="panneau-corail">
+    <div class="nom">CORAIL</div>
+    <div class="pastilles" id="reserve-corail"></div>
+    <div class="info" id="info-corail"></div>
+  </div>
+</div>
+
+<main id="zone-plateau">
+  <canvas id="plateau" role="img" aria-label="Plateau de jeu MARÉES : archipel hexagonal qui coule"></canvas>
+</main>
+
+<footer id="legende">
+  <span>Poser : cliquez une case libre — Déplacer : cliquez une pierre puis une case surlignée (≤ 2 cases) — Échap : annuler</span>
+  <span class="sep">·</span>
+  <span>Badge 3·2·1 : la case sombrera à la 3ᵉ, 2ᵉ ou prochaine marée</span>
+</footer>
+
+<div id="toasts" aria-live="polite"></div>
+
+<div class="voile visible" id="voile-accueil">
+  <div class="panneau accueil" role="dialog" aria-label="Écran d’accueil MARÉES">
+    <h2>MARÉES</h2>
+    <p class="sous-titre-accueil">Un Go mouvant sur un archipel qui coule</p>
+    <div class="menu-accueil" id="accueil-menu">
+      <button class="choix" id="btn-hotseat" type="button">Deux joueurs — même écran</button>
+      <button class="choix" id="btn-ia" type="button">Contre l’IA<span class="precis">vous jouez Azur, l’ordinateur joue Corail</span></button>
+      <button class="choix" id="btn-enligne" type="button">En ligne — salon LOB7<span class="precis">deux navigateurs sur lob7.com</span></button>
+    </div>
+    <div class="menu-accueil" id="accueil-ia" hidden>
+      <button class="choix" id="btn-ia-facile" type="button">Facile<span class="precis">environ six coups sur dix aléatoires</span></button>
+      <button class="choix" id="btn-ia-normal" type="button">Normal<span class="precis">captures, sauvetages, territoire durable</span></button>
+      <button class="sous-choix" id="btn-ia-retour" type="button">← Retour</button>
+    </div>
+    <div class="menu-accueil" id="accueil-file" hidden>
+      <p id="accueil-file-statut">Connexion au salon LOB7…</p>
+      <button class="sous-choix" id="btn-annuler-file" type="button">Annuler</button>
+    </div>
+    <button class="sous-choix accueil-regles" id="btn-regles-accueil" type="button">Règles</button>
+    <p id="accueil-note"></p>
+  </div>
+</div>
+
+<div class="voile" id="voile-regles">
+  <div class="panneau" role="dialog" aria-label="Règles du jeu">
+    <button class="fermer" id="fermer-regles" type="button" aria-label="Fermer">✕</button>
+    <h2>Règles du jeu</h2>
+    <h3>L’archipel</h3>
+    <p>Azur commence. Chaque joueur dispose de 8 pierres en réserve, aucune sur le plateau au départ. L’atoll compte 50 cases — et la mer le dévore. À la fin, celui qui possède le plus de pierres sur les terres encore émergées l’emporte.</p>
+    <h3>Votre tour — une seule action</h3>
+    <ul>
+      <li><strong>Placer</strong> : posez une pierre de votre réserve sur toute case émergée libre — même promise à la submersion.</li>
+      <li><strong>Déplacer</strong> : glissez une de vos pierres déjà en jeu vers une case émergée libre située à distance hexagonale ≤ 2 (sauter par-dessus une pierre est permis).</li>
+      <li>Réserve vide ? Seuls les déplacements restent possibles.</li>
+    </ul>
+    <h3>Captures (façon go)</h3>
+    <p>Après chaque action, toute pierre <em>ennemie</em> ayant au moins 4 de ses cases voisines existantes occupées par le joueur actif est capturée et retirée définitivement. Une case n’ayant que 3 voisines existantes ou moins (bord de mer, détroit) ne peut jamais être le théâtre d’une capture.</p>
+    <h3>La marée</h3>
+    <p>Un calendrier secret de 18 événements est scellé au début de la partie. Toutes les 6 demi-tours (une action d’un joueur = un demi-tour), la marée submerge 1 ou 2 cases : les pierres qui s’y trouvent se noient (retirées définitivement) et les cases deviennent de l’eau injouable.</p>
+    <h3>La prévision</h3>
+    <p>Les cases qui couleront lors des 3 prochaines marées sont marquées en permanence d’un badge : 3, 2 puis 1 marée restante. Au-delà, l’avenir reste sous l’eau.</p>
+    <h3>Fin de partie</h3>
+    <p>La partie s’arrête après la 18ᵉ marée, s’il ne reste que 14 cases émergées ou moins, ou si un joueur ne peut plus agir. On compte alors les pierres présentes sur le plateau : la majorité l’emporte — l’égalité est possible.</p>
+    <h3>Contrôles</h3>
+    <p>Cliquez une case libre pour poser une pierre ; cliquez une de vos pierres puis une case surlignée pour la déplacer ; Échap annule la sélection ou ferme les fenêtres.</p>
+    <h3>Contre l’IA</h3>
+    <p>Vous jouez Azur, l’ordinateur joue Corail — sans écran de passage : un message « L’IA réfléchit… » marque son tour (environ 800 ms). L’IA ne connaît que les informations publiques — le plateau et la prévision à 3 marées — jamais le calendrier secret. En <strong>Normal</strong>, elle évalue chaque action légale : capturer, sauver ses pierres dont la case coule d’ici 2 marées, menacer, s’installer sur des cases à longue durée de vie prévisible, connecter ses groupes, contrer près des zones sûres et éviter les badges 1-2 sauf capture immédiate. En <strong>Facile</strong>, elle joue environ 60 % de coups aléatoires légaux.</p>
+    <h3>En ligne — salon LOB7</h3>
+    <p>Deux navigateurs ouvrent le jeu depuis le même salon lob7.com. À la connexion, chaque participant annonce son identifiant : le plus petit devient <strong>Azur, l’hôte-arbitre</strong>, l’autre Corail. L’hôte détient l’état de la partie et le calendrier secret : il valide chaque coup de Corail (clé d’idempotence), l’applique, puis lui diffuse un plateau complet dont tout est public — hormis le calendrier, réduit aux submersions passées et à la prévision des 3 prochains événements. L’état visible est donc rigoureusement identique des deux côtés ; la victoire est prononcée par l’hôte. Toute déconnexion affiche « Connexion perdue » et ramène à l’accueil ; le bouton « Quitter le salon » permet de partir à tout moment.</p>
+    <p><em>Note d’honnêteté : l’hôte est un arbitre technique. Son navigateur connaît le calendrier secret et un hôte curieux pourrait l’inspecter — aucune triche n’est implémentée, mais la confiance repose sur lui.</em></p>
+    <p class="pourquoi">Pourquoi impossible avant l’informatique : un calendrier d’effondrement imprimé serait lisible par tous ; ici la prévision n’est révélée que 3 événements à l’avance.</p>
+    <div class="pied"><button id="fermer-regles-2" type="button">Fermer</button></div>
+  </div>
+</div>
+
+<div class="voile" id="voile-fin">
+  <div class="panneau fin">
+    <p class="surtitre" style="letter-spacing:.3em; font-size:12px; opacity:.7; margin:0 0 4px;">FIN DE PARTIE</p>
+    <h2 class="titre-fin" id="fin-titre"></h2>
+    <p id="fin-phrase"></p>
+    <p id="fin-score"></p>
+    <button id="btn-rejouer" type="button">Rejouer</button>
+  </div>
+</div>
+
+<!-- =====================================================================
+     SDK officiel LOB7 Rooms — COPIE INLINE EXACTE de
+     C:\dev\lob7\site\examples\prism-pair\lob7-rooms.js
+     (aucun fichier externe ; l’helper optionnel lob7-rooms-p2p.js n’est pas utilisé)
+     ===================================================================== -->
+<script>
+/* LOB7 Rooms SDK. Bundle locally; load before the optional lob7-rooms-p2p.js helper. */
+(function () {
+  'use strict';
+  var PARENT_ORIGINS = ['https://lob7.com', 'https://www.lob7.com'];
+  var active = null;
+  var connecting = null;
+  function identifier() {
+    var bytes = new Uint8Array(16);
+    globalThis.crypto.getRandomValues(bytes);
+    return Array.from(bytes, function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+  }
+  function errorFrom(value) {
+    var error = new Error(value.message || 'Room request failed.');
+    error.code = value.code || 'ROOM_REQUEST_FAILED';
+    if (Number.isInteger(value.status)) error.status = value.status;
+    if (Number.isFinite(value.retryAfterSeconds)) error.retryAfterSeconds = value.retryAfterSeconds;
+    return error;
+  }
+  function validData(value) {
+    var todo = [{ value: value, depth: 0 }], seen = new Set(), nodes = 0;
+    while (todo.length) {
+      var item = todo.pop(), current = item.value;
+      if (++nodes > 8192 || item.depth > 64) return false;
+      if (typeof current === 'string') { if (current.length > 8192) return false; continue; }
+      if (current === null || typeof current === 'boolean') continue;
+      if (typeof current === 'number') { if (!Number.isFinite(current)) return false; continue; }
+      if (typeof current !== 'object' || seen.has(current)) return false;
+      seen.add(current);
+      if (!Array.isArray(current) && Object.getPrototypeOf(current) !== Object.prototype && Object.getPrototypeOf(current) !== null) return false;
+      var keys = Object.keys(current);
+      if (keys.length + todo.length > 8192 || keys.some(function (key) { return key.length > 8192; })) return false;
+      if (Array.isArray(current) && (current.length > 8192 || keys.length !== current.length)) return false;
+      Object.values(current).forEach(function (child) { todo.push({ value: child, depth: item.depth + 1 }); });
+    }
+    try { return new TextEncoder().encode(JSON.stringify(value)).byteLength <= 8192; } catch (_) { return false; }
+  }
+  function connection(room, port) {
+    var pending = new Map(), stopped = false, stopSubscription = null, subscriptionError = null, disconnectListeners = new Set();
+    function disconnect(reason) {
+      if (stopped) return;
+      stopped = true;
+      globalThis.removeEventListener('pagehide', leaveOnExit);
+      disconnectListeners.forEach(function (listener) { listener(errorFrom(reason)); });
+      disconnectListeners.clear();
+      var onError = subscriptionError;
+      if (stopSubscription) stopSubscription();
+      if (onError) { try { onError(errorFrom(reason)); } catch (_) { /* observer only */ } }
+      pending.forEach(function (task) { globalThis.clearTimeout(task.timer); task.reject(errorFrom(reason)); });
+      pending.clear();
+      port.close();
+      if (active === result) active = null;
+    }
+    port.onmessage = function (event) {
+      var response = event.data;
+      if (response && response.type === 'disconnected') return disconnect(response.error || { code: 'ROOM_CHANGED' });
+      var task = response && pending.get(response.requestId);
+      if (!task) return;
+      globalThis.clearTimeout(task.timer);
+      pending.delete(response.requestId);
+      if (response.error) task.reject(errorFrom(response.error));
+      else task.resolve(response.result);
+    };
+    port.onmessageerror = function () { disconnect({ code: 'ROOM_CONNECTION_CLOSED', message: 'The room connection closed. Connect again.' }); };
+    port.start();
+    function request(method, params) {
+      if (stopped) return Promise.reject(errorFrom({ code: 'ROOM_CONNECTION_CLOSED', message: 'Connect to the selected room again.' }));
+      if (pending.size >= 4) return Promise.reject(errorFrom({ code: 'ROOM_BUSY', message: 'Too many requests are in progress.', retryAfterSeconds: 3 }));
+      var id = identifier();
+      return new Promise(function (resolve, reject) {
+        var timer = globalThis.setTimeout(function () {
+          pending.delete(id);
+          reject(errorFrom({ code: 'ROOM_TIMEOUT', message: 'The room request timed out. Retry a send using the same idempotency key.' }));
+        }, 25000);
+        pending.set(id, { resolve: resolve, reject: reject, timer: timer });
+        try { port.postMessage({ requestId: id, method: method, params: params }); }
+        catch (_) { globalThis.clearTimeout(timer); pending.delete(id); reject(errorFrom({ code: 'ROOM_PAYLOAD_INVALID' })); }
+      });
+    }
+    var result = {
+      room: room,
+      read: function (options) {
+        options = options || {};
+        return request('read', { after: options.after === undefined ? 0 : options.after, limit: options.limit === undefined ? 50 : options.limit }).then(function (batch) {
+          if (Number.isSafeInteger(batch.cursor)) room.lastSequence = Math.max(room.lastSequence || 0, batch.cursor);
+          return batch;
+        });
+      },
+      send: function (data, options) {
+        var key = options && options.idempotencyKey || identifier();
+        var promise = validData(data)
+          ? request('send', { data: data, idempotencyKey: key })
+          : Promise.reject(errorFrom({ code: 'ROOM_PAYLOAD_INVALID', message: 'Use finite JSON data no larger than 8192 UTF-8 bytes.' }));
+        return promise.then(function (response) { return response.message; }).catch(function (error) { error.idempotencyKey = key; throw error; });
+      },
+      subscribe: function (callback, options) {
+        options = options || {};
+        if (typeof callback !== 'function') throw new TypeError('subscribe requires a callback.');
+        if (stopSubscription) throw errorFrom({ code: 'ROOM_SUBSCRIPTION_EXISTS', message: 'Stop the current subscription before starting another.' });
+        if (stopped) throw errorFrom({ code: 'ROOM_CONNECTION_CLOSED', message: 'Connect to the selected room again.' });
+        var cursor = options.after === undefined ? 0 : options.after;
+        if (!Number.isSafeInteger(cursor) || cursor < 0) throw new TypeError('after must be a nonnegative integer.');
+        var cancelled = false, timer = null, delay = 3000;
+        function stop() { cancelled = true; if (timer !== null) globalThis.clearTimeout(timer); if (stopSubscription === stop) { stopSubscription = null; subscriptionError = null; } }
+        async function poll() {
+          if (cancelled || stopped) return;
+          try {
+            var batch = await result.read({ after: cursor });
+            for (var message of batch.messages) {
+              if (cancelled || stopped) return;
+              await callback(message);
+              cursor = message.sequence;
+            }
+            cursor = Math.max(cursor, batch.cursor);
+            delay = batch.messages.length ? 3000 : Math.min(delay * 1.5, 15000);
+            delay = Math.max(delay, (batch.pollAfterSeconds || 3) * 1000);
+          } catch (error) {
+            if (cancelled || stopped) return;
+            if (['ROOM_EXPIRED', 'ROOM_NOT_FOUND', 'RELEASE_NOT_FOUND', 'ACCOUNT_SUSPENDED', 'GAME_NOT_ALLOWED', 'SCOPE_REQUIRED', 'AUTH_INVALID', 'AUTH_REQUIRED'].includes(error.code)) {
+              disconnect(error);
+              return;
+            }
+            delay = Math.max(Math.min(delay * 2, 30000), (error.retryAfterSeconds || 0) * 1000);
+            if (typeof options.onError === 'function') { try { options.onError(error); } catch (_) { /* callback cannot break cleanup */ } }
+          }
+          if (!cancelled && !stopped) timer = globalThis.setTimeout(poll, delay + Math.floor(Math.random() * 250));
+        }
+        stopSubscription = stop;
+        subscriptionError = typeof options.onError === 'function' ? options.onError : null;
+        void poll();
+        return stop;
+      },
+    };
+    if (typeof globalThis.LOB7RoomsP2P === 'function') result.connectPeer = function (options) {
+      return globalThis.LOB7RoomsP2P(result, options, function (listener) {
+        if (stopped) throw errorFrom({ code: 'ROOM_CONNECTION_CLOSED', message: 'Connect to the selected room again.' });
+        disconnectListeners.add(listener);
+        return function () { disconnectListeners.delete(listener); };
+      }, { identifier: identifier, errorFrom: errorFrom, validData: validData });
+    };
+    function leaveOnExit(event) {
+      if (event.persisted) return;
+      disconnect({ code: 'ROOM_CONNECTION_CLOSED', message: 'The game document closed.' });
+    }
+    globalThis.addEventListener('pagehide', leaveOnExit);
+    return result;
+  }
+  function connect() {
+    if (active) return Promise.resolve(active);
+    if (connecting) return connecting;
+    if (globalThis.parent === globalThis) return Promise.reject(errorFrom({ code: 'ROOM_PREVIEW_REQUIRED', message: 'Open this project in its LOB7 preview and choose a room.' }));
+    connecting = new Promise(function (resolve, reject) {
+      var nonce = identifier(), requestId = identifier(), timeout, deferred;
+      function cleanup() {
+        globalThis.removeEventListener('message', receive);
+        globalThis.removeEventListener('load', ready);
+        globalThis.clearTimeout(timeout);
+        if (deferred !== undefined) globalThis.clearTimeout(deferred);
+      }
+      function receive(event) {
+        var response = event.data;
+        if (event.source !== globalThis.parent || !PARENT_ORIGINS.includes(event.origin) || !response || response.type !== 'lob7.rooms.connected'
+          || response.nonce !== nonce || response.requestId !== requestId) return;
+        cleanup();
+        if (response.error) return reject(errorFrom(response.error));
+        if (!response.room || !event.ports[0]) return reject(errorFrom({ code: 'ROOM_PROTOCOL_INVALID' }));
+        active = connection(response.room, event.ports[0]);
+        resolve(active);
+      }
+      // Run after the parent's iframe load handler has invalidated any previous document.
+      function ready() { deferred = globalThis.setTimeout(function () { PARENT_ORIGINS.forEach(function (origin) { globalThis.parent.postMessage({ type: 'lob7.rooms.connect', nonce: nonce, requestId: requestId }, origin); }); }, 0); }
+      globalThis.addEventListener('message', receive);
+      timeout = globalThis.setTimeout(function () { cleanup(); reject(errorFrom({ code: 'ROOM_BRIDGE_UNAVAILABLE', message: 'This document is not connected to the LOB7 room panel.' })); }, 8000);
+      if (globalThis.document.readyState === 'complete') ready();
+      else globalThis.addEventListener('load', ready, { once: true });
+    }).finally(function () { connecting = null; });
+    return connecting;
+  }
+  globalThis.LOB7Rooms = Object.freeze({ connect: connect });
+})();
+</script>
+
+<script>
+'use strict';
+
+/* =====================================================================
+   1. CONSTANTES
+   ===================================================================== */
+
+// #LOGIQUE-DEBUT (zone pure, sans DOM — extraite pour auto-contrôle Node)
+const COULEURS = { azur: '#6ec8ff', corail: '#ff9166', or: '#f2e3c2', fond: '#0e3f4a' };
+const JOUEURS = ['azur', 'corail'];
+const RESERVE_INITIALE = 8;   // pierres par joueur en réserve
+const NB_EVENEMENTS = 18;     // événements de marée au calendrier secret
+const PERIODE_MAREE = 6;      // un événement toutes les N demi-tours
+const SEUIL_FIN_CASES = 14;   // fin si ≤ 14 cases émergées
+const RAYON_GRILLE = 4;       // hexagone axial de rayon 4 → 61 cases
+
+// Archipel « fait main » : eau initiale = lagon central (hexagone de rayon 1,
+// 7 cases) + 4 baies tournantes ((1,-4)/(-1,4) et (4,-1)/(-4,1)).
+// Symétrie de rotation 180° : chaque case d'eau a son opposée (-q,-r).
+// Terre = 61 − 11 = 50 cases, en une seule masse connectée, sans îlot d'une case.
+const EAU_INITIALE = [
+  [0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1],   // lagon
+  [1, -4], [-1, 4], [4, -1], [-4, 1]                            // baies
+];
+
+const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+
+/* =====================================================================
+   2. GÉOMÉTRIE HEXAGONALE (axiale q,r — pointy-top au rendu)
+   ===================================================================== */
+
+function hexCle(q, r) { return q + ',' + r; }
+function parserCle(cle) {
+  const i = cle.indexOf(',');
+  return [parseInt(cle.slice(0, i), 10), parseInt(cle.slice(i + 1), 10)];
+}
+function voisinsHex(q, r) {
+  const res = [];
+  for (let i = 0; i < 6; i++) res.push([q + DIRS[i][0], r + DIRS[i][1]]);
+  return res;
+}
+function dansGrille(q, r) {
+  return Math.abs(q) <= RAYON_GRILLE && Math.abs(r) <= RAYON_GRILLE && Math.abs(q + r) <= RAYON_GRILLE;
+}
+function hexDist(q1, r1, q2, r2) {
+  const dq = q1 - q2, dr = r1 - r2;
+  return (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2;
+}
+function adversaire(j) { return j === 'azur' ? 'corail' : 'azur'; }
+
+/* =====================================================================
+   3. PLATEAU, CALENDRIER, NOUVELLE PARTIE
+   ===================================================================== */
+
+function construirePlateau() {
+  const eau = {};
+  for (let i = 0; i < EAU_INITIALE.length; i++) eau[hexCle(EAU_INITIALE[i][0], EAU_INITIALE[i][1])] = true;
+  const cases = {};
+  for (let r = -RAYON_GRILLE; r <= RAYON_GRILLE; r++) {
+    for (let q = -RAYON_GRILLE; q <= RAYON_GRILLE; q++) {
+      if (!dansGrille(q, r)) continue;
+      const cle = hexCle(q, r);
+      if (eau[cle]) continue;
+      cases[cle] = { q: q, r: r, submerge: false, pierre: null };
+    }
+  }
+  return cases;
+}
+
+function melanger(tab, rng) {
+  for (let i = tab.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const t = tab[i]; tab[i] = tab[j]; tab[j] = t;
+  }
+  return tab;
+}
+
+// Calendrier secret : 18 événements de 1 à 2 cases, tirés sans répétition
+// parmi les cases terrestres. Garde : chaque événement garde au moins une case.
+function genererCalendrier(clesTerre, rng) {
+  const pool = melanger(clesTerre.slice(), rng);
+  const cal = [];
+  let idx = 0;
+  for (let e = 0; e < NB_EVENEMENTS; e++) {
+    const restantes = pool.length - idx;
+    const evenementsRestants = NB_EVENEMENTS - e;
+    let n = (rng() < 0.5 ? 1 : 2);
+    if (n > restantes - (evenementsRestants - 1)) n = 1;
+    const ev = [];
+    for (let i = 0; i < n; i++) ev.push(pool[idx++]);
+    cal.push(ev);
+  }
+  return cal;
+}
+
+function nouvellePartieLogique(rng) {
+  rng = rng || Math.random;
+  const cases = construirePlateau();
+  return {
+    cases: cases,
+    reserve: { azur: RESERVE_INITIALE, corail: RESERVE_INITIALE },
+    joueur: 'azur',           // Azur commence
+    demiTour: 1,              // 1 action = 1 demi-tour
+    calendrier: genererCalendrier(Object.keys(cases), rng),
+    evenementsFaits: 0,
+    fini: false,
+    vainqueur: null,          // 'azur' | 'corail' | 'egalite'
+    raisonFin: null,          // 'calendrier' | 'archipel' | 'blocage'
+    detailFin: null
+  };
+}
+
+/* =====================================================================
+   4. REQUÊTES (tout ce qui est légal)
+   ===================================================================== */
+
+function caseEmergee(st, cle) {
+  const c = st.cases[cle];
+  return (c && !c.submerge) ? c : null;
+}
+function casesEmergees(st) {
+  const res = [];
+  for (const cle in st.cases) if (!st.cases[cle].submerge) res.push(cle);
+  return res;
+}
+function nbEmergees(st) { return casesEmergees(st).length; }
+function casesLibres(st) {
+  const res = [];
+  for (const cle in st.cases) {
+    const c = st.cases[cle];
+    if (!c.submerge && !c.pierre) res.push(cle);
+  }
+  return res;
+}
+function voisinsExistants(st, cle) {
+  const qr = parserCle(cle);
+  const res = [];
+  const vs = voisinsHex(qr[0], qr[1]);
+  for (let i = 0; i < vs.length; i++) {
+    const k = hexCle(vs[i][0], vs[i][1]);
+    if (caseEmergee(st, k)) res.push(k);
+  }
+  return res;
+}
+
+function placementsLegaux(st) {
+  return st.reserve[st.joueur] > 0 ? casesLibres(st) : [];
+}
+
+function deplacementsLegauxDepuis(st, cle, joueur) {
+  if (!joueur) joueur = st.joueur;
+  const c = caseEmergee(st, cle);
+  if (!c || c.pierre !== joueur) return [];
+  const res = [];
+  const libres = casesLibres(st);
+  for (let i = 0; i < libres.length; i++) {
+    const dest = st.cases[libres[i]];
+    const d = hexDist(c.q, c.r, dest.q, dest.r);
+    if (d >= 1 && d <= 2) res.push(libres[i]);
+  }
+  return res;
+}
+
+function peutAgir(st, joueur) {
+  if (st.reserve[joueur] > 0 && casesLibres(st).length > 0) return true;
+  for (const cle in st.cases) {
+    const c = st.cases[cle];
+    if (c.submerge || c.pierre !== joueur) continue;
+    if (deplacementsLegauxDepuis(st, cle, joueur).length > 0) return true;
+  }
+  return false;
+}
+
+function actionsLegales(st) {
+  const res = [];
+  const pl = placementsLegaux(st);
+  for (let i = 0; i < pl.length; i++) res.push({ type: 'placer', cle: pl[i] });
+  for (const cle in st.cases) {
+    const c = st.cases[cle];
+    if (c.submerge || c.pierre !== st.joueur) continue;
+    const ds = deplacementsLegauxDepuis(st, cle);
+    for (let i = 0; i < ds.length; i++) res.push({ type: 'deplacer', de: cle, vers: ds[i] });
+  }
+  return res;
+}
+
+/* =====================================================================
+   5. RÉSOLUTION : captures, marée, fin de partie, moteur du demi-tour
+   ===================================================================== */
+
+// Capture façon go : toute pierre ENNEMIE du joueur actif ayant ≥ 4 voisins
+// existants occupés par le joueur actif est retirée (une passe simultanée).
+function capturesApresAction(st, joueur) {
+  const adv = adversaire(joueur);
+  const captures = [];
+  for (const cle in st.cases) {
+    const c = st.cases[cle];
+    if (c.submerge || c.pierre !== adv) continue;
+    let n = 0;
+    const vs = voisinsExistants(st, cle);
+    for (let i = 0; i < vs.length; i++) {
+      if (st.cases[vs[i]].pierre === joueur) n++;
+    }
+    if (n >= 4) captures.push({ cle: cle, couleur: adv });
+  }
+  for (let i = 0; i < captures.length; i++) st.cases[captures[i].cle].pierre = null;
+  return captures;
+}
+
+function declencherEvenement(st) {
+  const ev = st.calendrier[st.evenementsFaits];
+  st.evenementsFaits++;
+  const detail = [];
+  for (let i = 0; i < ev.length; i++) {
+    const c = st.cases[ev[i]];
+    if (!c || c.submerge) continue;      // défensif : jamais déjà submergée
+    const noyees = c.pierre ? [c.pierre] : [];
+    c.submerge = true;
+    c.pierre = null;
+    detail.push({ cle: ev[i], noyees: noyees });
+  }
+  return { numero: st.evenementsFaits, cases: detail };
+}
+
+// Prévision permanente : cases qui couleront aux 3 prochains événements.
+// Badge 1 = prochaine marée, 2 et 3 = les deux suivantes.
+function prevision(st) {
+  // État distant reconstruit (mode en ligne, côté Corail) : la prévision
+  // publique tient lieu de calendrier, absent de l'état visible.
+  if (st.previsionPublique) return st.previsionPublique;
+  const marquage = {};
+  for (let i = 0; i < 3; i++) {
+    const ev = st.calendrier[st.evenementsFaits + i];
+    if (!ev) continue;
+    const badge = i + 1;
+    for (let j = 0; j < ev.length; j++) {
+      const c = st.cases[ev[j]];
+      if (c && !c.submerge) marquage[ev[j]] = badge;
+    }
+  }
+  return marquage;
+}
+
+function compterPierres(st) {
+  const t = { azur: 0, corail: 0 };
+  for (const cle in st.cases) {
+    const p = st.cases[cle].pierre;
+    if (p) t[p]++;
+  }
+  return t;
+}
+
+function conclure(st, raison, detail) {
+  st.fini = true;
+  st.raisonFin = raison;
+  st.detailFin = detail || null;
+  const t = compterPierres(st);
+  st.vainqueur = t.azur > t.corail ? 'azur' : (t.corail > t.azur ? 'corail' : 'egalite');
+  return t;
+}
+
+// Moteur : applique UNE action, résout captures + marée éventuelle,
+// passe au demi-tour suivant et détecte la fin. Retourne un journal
+// (effets pour l'UI/animations) ou { erreur } si l'action est illégale.
+function jouerAction(st, action) {
+  if (st.fini) return { erreur: 'La partie est terminée.' };
+  const joueur = st.joueur;
+  const journal = { joueur: joueur, placement: null, deplacement: null, captures: [], maree: null, fin: null };
+
+  if (action.type === 'placer') {
+    const c = caseEmergee(st, action.cle);
+    if (!c) return { erreur: 'Case injouable (eau ou déjà submergée).' };
+    if (c.pierre) return { erreur: 'Case occupée.' };
+    if (st.reserve[joueur] <= 0) return { erreur: 'Réserve vide — déplacez une de vos pierres.' };
+    c.pierre = joueur;
+    st.reserve[joueur]--;
+    journal.placement = action.cle;
+  } else if (action.type === 'deplacer') {
+    const de = caseEmergee(st, action.de);
+    const vers = caseEmergee(st, action.vers);
+    if (!de || de.pierre !== joueur) return { erreur: 'Cette pierre n’est pas à vous.' };
+    if (!vers) return { erreur: 'Destination injouable (eau ou submergée).' };
+    if (vers.pierre) return { erreur: 'Destination occupée.' };
+    const d = hexDist(de.q, de.r, vers.q, vers.r);
+    if (d < 1 || d > 2) return { erreur: 'Destination trop éloignée (distance hexagonale max 2).' };
+    de.pierre = null;
+    vers.pierre = joueur;
+    journal.deplacement = { de: action.de, vers: action.vers };
+  } else {
+    return { erreur: 'Action inconnue.' };
+  }
+
+  journal.captures = capturesApresAction(st, joueur);
+
+  if (st.demiTour % PERIODE_MAREE === 0 && st.evenementsFaits < NB_EVENEMENTS) {
+    journal.maree = declencherEvenement(st);
+  }
+
+  if (st.evenementsFaits >= NB_EVENEMENTS) {
+    const t = conclure(st, 'calendrier');
+    journal.fin = { code: 'calendrier', vainqueur: st.vainqueur, compte: t };
+  } else if (nbEmergees(st) <= SEUIL_FIN_CASES) {
+    const t = conclure(st, 'archipel');
+    journal.fin = { code: 'archipel', vainqueur: st.vainqueur, compte: t };
+  } else {
+    st.demiTour++;
+    st.joueur = adversaire(joueur);
+    if (!peutAgir(st, st.joueur)) {
+      const t = conclure(st, 'blocage', { joueur: st.joueur });
+      journal.fin = { code: 'blocage', vainqueur: st.vainqueur, compte: t, joueurBloque: st.joueur };
+    }
+  }
+  return journal;
+}
+// #LOGIQUE-FIN
+
+/* =====================================================================
+   6. COUCHE D'ASSETS — assets/manifest.js chargé dynamiquement (file://)
+      Si le manifest (ou un fichier) est absent : rendu 100 % procédural.
+      asset(id, tailleAfficheePx) → Image (variante ≥ taille × dpr) | null
+   ===================================================================== */
+
+const Assets = {
+  manifest: null,
+  images: {},
+  idsUtiles: ['marees/pierre/azur', 'marees/pierre/corail', 'common/case_hex', 'common/icone_vague', 'common/fond'],
+
+  init() {
+    const s = document.createElement('script');
+    s.src = 'assets/manifest.js';
+    s.onload = () => {
+      const m = window.ASSETS_MANIFEST;
+      if (m && Array.isArray(m.assets)) {
+        this.manifest = m;
+        this.precharger();
+      }
+    };
+    s.onerror = () => { /* pas d'assets : rendu procédural, aucun souci */ };
+    document.head.appendChild(s);
+  },
+
+  precharger() {
+    for (const entry of this.manifest.assets) {
+      if (this.idsUtiles.indexOf(entry.id) === -1) continue;
+      const variantes = entry.variants || (entry.file ? [{ px: 0, file: entry.file }] : []);
+      for (const v of variantes) {
+        const cle = entry.id + '|' + v.file;
+        if (this.images[cle]) continue;
+        const img = new Image();
+        img.onload = () => { img._prete = true; };
+        img.src = 'assets/' + v.file;
+        this.images[cle] = img;
+      }
+    }
+  },
+
+  asset(id, tailleAffichee) {
+    if (!this.manifest) return null;
+    let entry = null;
+    for (const a of this.manifest.assets) if (a.id === id) { entry = a; break; }
+    if (!entry) return null;
+    const prete = (img) => img && img.complete && img.naturalWidth > 0;
+    if (entry.format === 'svg') {
+      const img = this.images[id + '|' + entry.file];
+      return prete(img) ? img : null;
+    }
+    const variantes = (entry.variants || []).slice().sort((a, b) => a.px - b.px);
+    if (!variantes.length) return null;
+    const minPx = Math.ceil((tailleAffichee || 256) * (window.devicePixelRatio || 1));
+    let choix = variantes[variantes.length - 1];
+    for (const v of variantes) if (v.px >= minPx) { choix = v; break; }
+    const img = this.images[id + '|' + choix.file];
+    return prete(img) ? img : null;
+  }
+};
+window.asset = (id, taille) => Assets.asset(id, taille);
+
+/* =====================================================================
+   7. ÉTAT UI + ANIMATIONS (l'état de jeu reste dans ui.state, séparé)
+   ===================================================================== */
+
+const ui = { state: null, selection: null, dests: [], hover: null, bloque: false };
+const anims = [];
+const cachees = {};       // cle → true : pierre cachée du rendu statique pendant une anim
+let idPartie = 0;         // invalide les callbacks différés obsolètes
+
+function ajouterAnim(a) {
+  a.t0 = performance.now() + (a.delay || 0);
+  anims.push(a);
+}
+function majAnims(t) {
+  for (let i = anims.length - 1; i >= 0; i--) {
+    const a = anims[i];
+    if (t < a.t0) continue;
+    if (t - a.t0 >= a.dur) {
+      if (a.type === 'place' || a.type === 'move') delete cachees[a.cleFin];
+      anims.splice(i, 1);
+    }
+  }
+}
+function viderAnims() {
+  anims.length = 0;
+  for (const k in cachees) delete cachees[k];
+}
+
+/* =====================================================================
+   8. LAYOUT + RENDU CANVAS (dpr, plein écran, responsive)
+   ===================================================================== */
+
+const canvas = document.getElementById('plateau');
+const ctx = canvas.getContext('2d');
+const vue = { w: 0, h: 0, dpr: 1, cx: 0, cy: 0, s: 24 };
+const rendu = { clesTriees: [], cotes: [], hautFondA: null, hautFondB: null, terreSale: true };
+const SQRT3 = Math.sqrt(3);
+
+function hexToPixel(q, r) {
+  return { x: vue.cx + vue.s * SQRT3 * (q + r / 2), y: vue.cy + vue.s * 1.5 * r };
+}
+function hexToPixelCle(cle) {
+  const qr = parserCle(cle);
+  return hexToPixel(qr[0], qr[1]);
+}
+function pixelVersCle(px, py) {
+  const x = (px - vue.cx) / vue.s, y = (py - vue.cy) / vue.s;
+  const q = SQRT3 / 3 * x - y / 3;
+  const r = 2 / 3 * y;
+  let cq = Math.round(q), cr = Math.round(r), cs = Math.round(-q - r);
+  const dq = Math.abs(q - cq), dr = Math.abs(r - cr), ds = Math.abs(-q - r - cs);
+  if (dq > dr && dq > ds) cq = -cr - cs; else if (dr > ds) cr = -cq - cs;
+  return hexCle(cq, cr);
+}
+
+function redimensionner() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  vue.dpr = dpr;
+  vue.w = Math.max(320, rect.width);
+  vue.h = Math.max(240, rect.height);
+  canvas.width = Math.max(1, Math.round(vue.w * dpr));
+  canvas.height = Math.max(1, Math.round(vue.h * dpr));
+  // emprise de l'hexagone de rayon 4 : centres x ∈ ±4√3·s, y ∈ ±6s (+ demi-case)
+  const largeurU = 2 * 4 * SQRT3 + SQRT3;   // ≈ 15.59·s
+  const hauteurU = 2 * RAYON_GRILLE * 1.5 + 2; // = 14·s
+  vue.s = Math.max(12, Math.min((vue.w - 56) / largeurU, (vue.h - 44) / hauteurU));
+  vue.cx = vue.w / 2;
+  vue.cy = vue.h / 2;
+  rendu.terreSale = true;
+}
+
+function rafraichirRendu() {
+  rendu.terreSale = false;
+  rendu.clesTriees = casesEmergees(ui.state).sort((a, b) => {
+    const ca = ui.state.cases[a], cb = ui.state.cases[b];
+    return (ca.r - cb.r) || (ca.q - cb.q);
+  });
+  construireCotes();
+  rendu.hautFondA = construireHautFond(vue.s * 1.52, '#1c6b72');
+  rendu.hautFondB = construireHautFond(vue.s * 1.18, '#2b878e');
+}
+
+// Arêtes côtières : côtés d'une case émergée qui regardent l'eau
+// (voisin absent de la carte, ou submergé) — pour l'écume animée.
+function construireCotes() {
+  rendu.cotes = [];
+  const theta = [0, -60, -120, 180, 120, 60]; // normale du côté pour DIRS[i]
+  for (const cle of rendu.clesTriees) {
+    const c = ui.state.cases[cle];
+    const p = hexToPixel(c.q, c.r);
+    const R = vue.s * 0.93;
+    for (let d = 0; d < 6; d++) {
+      const voisin = ui.state.cases[hexCle(c.q + DIRS[d][0], c.r + DIRS[d][1])];
+      if (voisin && !voisin.submerge) continue;
+      const a1 = (theta[d] - 30) * Math.PI / 180;
+      const a2 = (theta[d] + 30) * Math.PI / 180;
+      const th = theta[d] * Math.PI / 180;
+      rendu.cotes.push({
+        x1: p.x + R * Math.cos(a1), y1: p.y + R * Math.sin(a1),
+        x2: p.x + R * Math.cos(a2), y2: p.y + R * Math.sin(a2),
+        nx: Math.cos(th), ny: Math.sin(th),
+        phase: ((c.q + 9) * 7 + (c.r + 9) * 13 + d * 3) % 6.2832
+      });
+    }
+  }
+}
+
+function construireHautFond(R, couleur) {
+  const cv = document.createElement('canvas');
+  cv.width = canvas.width;
+  cv.height = canvas.height;
+  const c2 = cv.getContext('2d');
+  c2.setTransform(vue.dpr, 0, 0, vue.dpr, 0, 0);
+  c2.fillStyle = couleur;
+  for (const cle of rendu.clesTriees) {
+    const p = hexToPixelCle(cle);
+    c2.beginPath();
+    for (let k = 0; k < 6; k++) {
+      const a = Math.PI / 180 * (60 * k - 30);
+      const x = p.x + R * Math.cos(a), y = p.y + R * Math.sin(a);
+      if (k === 0) c2.moveTo(x, y); else c2.lineTo(x, y);
+    }
+    c2.closePath();
+    c2.fill();
+  }
+  return cv;
+}
+
+function pseudo01(n) {
+  const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return x - Math.floor(x);
+}
+function easeOutCubic(k) { return 1 - Math.pow(1 - k, 3); }
+function easeInOutQuad(k) { return k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; }
+function easeOutBack(k) {
+  const c = 1.70158;
+  return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2);
+}
+
+function cheminHex(x, y, R) {
+  ctx.beginPath();
+  for (let k = 0; k < 6; k++) {
+    const a = Math.PI / 180 * (60 * k - 30);
+    const px = x + R * Math.cos(a), py = y + R * Math.sin(a);
+    if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+}
+
+// Case de terre claire avec relief (ou case + contour asset si manifest présent)
+function dessinerCaseBase(x, y, q, r, opts) {
+  opts = opts || {};
+  const R = vue.s * 0.93 * (opts.scale || 1);
+  ctx.save();
+  ctx.globalAlpha = opts.alpha != null ? opts.alpha : 1;
+  cheminHex(x, y, R);
+  const g = ctx.createLinearGradient(x, y - R, x, y + R);
+  g.addColorStop(0, '#e8d7a8');
+  g.addColorStop(0.55, '#d9c08a');
+  g.addColorStop(1, '#c9a86a');
+  ctx.fillStyle = g;
+  ctx.fill();
+  // grain minéral déterministe
+  const h = (q + 9) * 73 + (r + 9) * 131;
+  ctx.fillStyle = 'rgba(138, 111, 77, 0.10)';
+  for (let i = 0; i < 3; i++) {
+    const aa = pseudo01(h + i * 7) * 6.2832;
+    const rr = pseudo01(h + i * 13 + 3) * 0.55 + 0.12;
+    ctx.beginPath();
+    ctx.arc(x + Math.cos(aa) * rr * R, y + Math.sin(aa) * rr * R, R * (0.05 + pseudo01(h + i) * 0.05), 0, 6.2832);
+    ctx.fill();
+  }
+  const imgCase = Assets.asset('common/case_hex', 2 * R);
+  if (imgCase && !opts.teinte) {
+    ctx.drawImage(imgCase, x - R, y - R, 2 * R, 2 * R);   // contour or pâle de l'asset
+    // légère ombre basse conservée pour garder du relief malgré le contour asset
+    ctx.strokeStyle = 'rgba(138, 111, 77, 0.25)';
+    ctx.lineWidth = Math.max(1, R * 0.04);
+    ctx.beginPath();
+    ctx.moveTo(x + R * Math.cos(Math.PI / 6), y + R * Math.sin(Math.PI / 6));
+    ctx.lineTo(x, y + R);
+    ctx.lineTo(x + R * Math.cos(5 * Math.PI / 6), y + R * Math.sin(5 * Math.PI / 6));
+    ctx.stroke();
+  } else {
+    // arête inférieure ombrée + supérieure éclairée (relief procédural)
+    ctx.strokeStyle = 'rgba(138, 111, 77, 0.45)';
+    ctx.lineWidth = Math.max(1.2, R * 0.05);
+    ctx.beginPath();
+    ctx.moveTo(x + R * Math.cos(Math.PI / 6), y + R * Math.sin(Math.PI / 6));
+    ctx.lineTo(x, y + R);
+    ctx.lineTo(x + R * Math.cos(5 * Math.PI / 6), y + R * Math.sin(5 * Math.PI / 6));
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 250, 232, 0.55)';
+    ctx.lineWidth = Math.max(1, R * 0.04);
+    ctx.beginPath();
+    ctx.moveTo(x + R * Math.cos(7 * Math.PI / 6), y + R * Math.sin(7 * Math.PI / 6));
+    ctx.lineTo(x, y - R);
+    ctx.lineTo(x + R * Math.cos(11 * Math.PI / 6), y + R * Math.sin(11 * Math.PI / 6));
+    ctx.stroke();
+    cheminHex(x, y, R);
+    ctx.strokeStyle = 'rgba(39, 75, 86, 0.4)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  if (opts.teinte) {
+    cheminHex(x, y, R);
+    ctx.fillStyle = 'rgba(11, 53, 64,' + opts.teinte + ')';
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// Galet hexagonal poli avec relief (procedural) ou sprite asset
+function cheminPolyArrondi(x, y, R, n, angle0, rc) {
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const a = angle0 + i * 2 * Math.PI / n;
+    pts.push([x + R * Math.cos(a), y + R * Math.sin(a)]);
+  }
+  ctx.beginPath();
+  const m0 = [(pts[0][0] + pts[1][0]) / 2, (pts[0][1] + pts[1][1]) / 2];
+  ctx.moveTo(m0[0], m0[1]);
+  for (let i = 1; i <= n; i++) {
+    const s = pts[i % n];
+    const s2 = pts[(i + 1) % n];
+    const m = [(s[0] + s2[0]) / 2, (s[1] + s2[1]) / 2];
+    ctx.arcTo(s[0], s[1], m[0], m[1], rc);
+    ctx.lineTo(m[0], m[1]);
+  }
+  ctx.closePath();
+}
+function dessinerPierre(x, y, couleur, opts) {
+  opts = opts || {};
+  const s = vue.s;
+  const R = s * 0.60 * (opts.scale || 1);
+  const dy = opts.dy || 0;
+  ctx.save();
+  ctx.globalAlpha = opts.alpha != null ? opts.alpha : 1;
+  if (!opts.sansOmbre) {
+    ctx.beginPath();
+    ctx.ellipse(x + s * 0.02, y + s * 0.12 + dy * 0.3, R * 0.85, R * 0.34, 0, 0, 6.2832);
+    ctx.fillStyle = 'rgba(39, 75, 86, 0.45)';
+    ctx.fill();
+  }
+  const img = Assets.asset('marees/pierre/' + couleur, R * 2.4);
+  if (img) {
+    // sprite avec marge 8 % : le carré est dessiné un peu plus grand que le galet
+    ctx.drawImage(img, x - R * 1.19, y - R * 1.19 + dy, R * 2.38, R * 2.38);
+    ctx.restore();
+    return;
+  }
+  const pal = couleur === 'azur'
+    ? { clair: '#d3edff', milieu: '#6ec8ff', sombre: '#2c6aa5', trait: '#1c4d7d' }
+    : { clair: '#ffd9c0', milieu: '#ff9166', sombre: '#c05a33', trait: '#8a3a20' };
+  ctx.translate(x, y + dy);
+  ctx.scale(1, 0.95);
+  cheminPolyArrondi(0, 0, R, 6, 0, R * 0.38);
+  const g = ctx.createRadialGradient(-R * 0.38, -R * 0.42, R * 0.12, 0, 0, R * 1.12);
+  g.addColorStop(0, pal.clair);
+  g.addColorStop(0.55, pal.milieu);
+  g.addColorStop(1, pal.sombre);
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.lineWidth = Math.max(1, R * 0.06);
+  ctx.strokeStyle = pal.trait;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(-R * 0.34, -R * 0.40, R * 0.30, R * 0.16, -0.5, 0, 6.2832);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.38)';
+  ctx.fill();
+  ctx.restore();
+}
+
+function dessinerBadge(x, y, num, t) {
+  const pulse = num === 1 ? 1 + 0.08 * Math.sin(t / 170) : 1;
+  const R = vue.s * 0.30 * pulse;
+  const contour = num === 1 ? COULEURS.corail : (num === 2 ? '#9fe8e0' : 'rgba(234, 250, 247, 0.6)');
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, R, 0, 6.2832);
+  ctx.fillStyle = 'rgba(39, 75, 86, 0.92)';
+  ctx.fill();
+  ctx.lineWidth = 1.6;
+  ctx.strokeStyle = contour;
+  ctx.stroke();
+  ctx.fillStyle = '#eafaf7';
+  ctx.font = 'bold ' + Math.max(10, Math.round(R * 1.05)) + 'px Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(num), x, y + R * 0.06);
+  ctx.restore();
+}
+
+function dessinerFond(t) {
+  const img = Assets.asset('common/fond', Math.max(vue.w, vue.h));
+  if (img) {
+    const ech = Math.max(vue.w / img.naturalWidth, vue.h / img.naturalHeight);
+    const w = img.naturalWidth * ech, h = img.naturalHeight * ech;
+    ctx.drawImage(img, (vue.w - w) / 2, (vue.h - h) / 2, w, h);
+    return;
+  }
+  const g = ctx.createRadialGradient(vue.cx, vue.cy * 0.92, vue.s * 2, vue.cx, vue.cy, Math.max(vue.w, vue.h) * 0.75);
+  g.addColorStop(0, '#12525e');
+  g.addColorStop(1, '#0e3f4a');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, vue.w, vue.h);
+  // houle très discrète : anneaux qui s'étendent depuis l'archipel
+  ctx.save();
+  ctx.strokeStyle = '#9fe8e0';
+  ctx.lineWidth = 1.4;
+  const Rmax = Math.max(vue.w, vue.h) * 0.78;
+  for (let i = 0; i < 3; i++) {
+    const k = ((t / 5200) + i / 3) % 1;
+    ctx.globalAlpha = 0.05 * (1 - k);
+    ctx.beginPath();
+    ctx.ellipse(vue.cx, vue.cy, vue.s + k * Rmax, (vue.s + k * Rmax) * 0.92, 0, 0, 6.2832);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function dessinerEcume(t) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (const c of rendu.cotes) {
+    ctx.strokeStyle = 'rgba(159, 232, 224, 0.18)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(c.x1 + c.nx * 2, c.y1 + c.ny * 2);
+    ctx.lineTo(c.x2 + c.nx * 2, c.y2 + c.ny * 2);
+    ctx.stroke();
+    const a = 0.07 + 0.11 * (0.5 + 0.5 * Math.sin(t / 760 + c.phase));
+    const o = 3.5 + 1.4 * Math.sin(t / 760 + c.phase);
+    ctx.strokeStyle = 'rgba(214, 247, 241, ' + a.toFixed(3) + ')';
+    ctx.lineWidth = 2.6;
+    ctx.beginPath();
+    ctx.moveTo(c.x1 + c.nx * o, c.y1 + c.ny * o);
+    ctx.lineTo(c.x2 + c.nx * o, c.y2 + c.ny * o);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function dessinerAnims(t) {
+  for (const a of anims) {
+    let k = (t - a.t0) / a.dur;
+    if (k < 0) continue;
+    if (k > 1) k = 1;
+    const e = easeOutCubic(k);
+    const p = hexToPixelCle(a.cle);
+    if (a.type === 'place') {
+      dessinerPierre(p.x, p.y, a.couleur, { scale: 0.35 + 0.65 * easeOutBack(k) });
+    } else if (a.type === 'move') {
+      const p2 = hexToPixelCle(a.vers);
+      const e2 = easeInOutQuad(k);
+      const x = p.x + (p2.x - p.x) * e2;
+      const y = p.y + (p2.y - p.y) * e2;
+      const arc = Math.sin(Math.PI * k) * vue.s * 0.35;
+      dessinerPierre(x, y - arc, a.couleur, { scale: 1 - 0.08 * Math.sin(Math.PI * k) });
+    } else if (a.type === 'capture') {
+      dessinerPierre(p.x, p.y, a.couleur, { alpha: 1 - k, dy: -0.28 * vue.s * e, scale: 1 + 0.12 * e });
+      ctx.save();
+      ctx.globalAlpha = 0.5 * (1 - k);
+      ctx.strokeStyle = '#9fe8e0';
+      ctx.lineWidth = 2;
+      const rr = vue.s * (0.5 + 0.5 * e);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y - 0.28 * vue.s * e, rr, 0, 6.2832);
+      ctx.stroke();
+      ctx.restore();
+    } else if (a.type === 'submersion') {
+      const qr = parserCle(a.cle);
+      dessinerCaseBase(p.x, p.y, qr[0], qr[1], { alpha: (1 - k) * 0.95, scale: 1 - 0.14 * e, teinte: 0.55 * e });
+      ctx.save();
+      ctx.globalAlpha = 0.55 * (1 - k);
+      ctx.strokeStyle = '#9fe8e0';
+      ctx.lineWidth = 2.2;
+      const rr = vue.s * (0.9 + 0.55 * e);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, rr, 0, 6.2832);
+      ctx.stroke();
+      ctx.restore();
+    } else if (a.type === 'noyade') {
+      dessinerPierre(p.x, p.y, a.couleur, { alpha: 1 - k, dy: 0.38 * vue.s * e, scale: 1 - 0.15 * e });
+    }
+  }
+}
+
+function dessiner(t) {
+  if (!ui.state) return;
+  if (rendu.terreSale) rafraichirRendu();
+  const st = ui.state;
+  ctx.setTransform(vue.dpr, 0, 0, vue.dpr, 0, 0);
+  dessinerFond(t);
+  ctx.globalAlpha = 0.5;
+  if (rendu.hautFondA) ctx.drawImage(rendu.hautFondA, 0, 0, vue.w, vue.h);
+  ctx.globalAlpha = 0.62;
+  if (rendu.hautFondB) ctx.drawImage(rendu.hautFondB, 0, 0, vue.w, vue.h);
+  ctx.globalAlpha = 1;
+
+  const marquage = prevision(st);
+  const dests = ui.dests;
+  const peutPlacer = st.reserve[st.joueur] > 0 && aMonTour();
+
+  // cases de terre
+  for (const cle of rendu.clesTriees) {
+    const c = st.cases[cle];
+    const p = hexToPixel(c.q, c.r);
+    dessinerCaseBase(p.x, p.y, c.q, c.r);
+    // voile des cases promises à la submersion
+    const badge = marquage[cle];
+    if (badge) {
+      const intensite = badge === 1 ? 0.24 + 0.06 * Math.sin(t / 170) : (badge === 2 ? 0.17 : 0.11);
+      cheminHex(p.x, p.y, vue.s * 0.93);
+      ctx.fillStyle = 'rgba(53, 208, 197, ' + intensite.toFixed(3) + ')';
+      ctx.fill();
+      if (badge === 1) {
+        cheminHex(p.x, p.y, vue.s * 0.86);
+        ctx.strokeStyle = 'rgba(255, 145, 102, ' + (0.5 + 0.3 * Math.sin(t / 170)).toFixed(3) + ')';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+    // survol
+    if (cle === ui.hover && aMonTour()) {
+      const actionnable = (peutPlacer && !c.pierre) || c.pierre === st.joueur || dests.indexOf(cle) !== -1;
+      if (actionnable) {
+        cheminHex(p.x, p.y, vue.s * 0.90);
+        ctx.strokeStyle = 'rgba(39, 75, 86, 0.7)';
+        ctx.lineWidth = 1.6;
+        ctx.stroke();
+      }
+    }
+    // destinations d'un déplacement
+    if (dests.indexOf(cle) !== -1) {
+      cheminHex(p.x, p.y, vue.s * 0.80);
+      ctx.fillStyle = c.pierre ? 'rgba(255,255,255,0)' : (st.joueur === 'azur' ? 'rgba(110,200,255,0.18)' : 'rgba(255,145,102,0.18)');
+      ctx.fill();
+      ctx.setLineDash([5, 5]);
+      ctx.lineDashOffset = -t / 36;
+      ctx.strokeStyle = COULEURS[st.joueur];
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    // sélection
+    if (cle === ui.selection) {
+      cheminHex(p.x, p.y, vue.s * 0.90);
+      ctx.save();
+      ctx.shadowColor = '#35d0c5';
+      ctx.shadowBlur = 12;
+      ctx.strokeStyle = '#35d0c5';
+      ctx.lineWidth = 2.4;
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  dessinerEcume(t);
+
+  // pierres (ordre haut → bas)
+  for (const cle of rendu.clesTriees) {
+    const c = st.cases[cle];
+    if (!c.pierre || cachees[cle]) continue;
+    const p = hexToPixel(c.q, c.r);
+    const enlevee = cle === ui.selection;
+    dessinerPierre(p.x, p.y - (enlevee ? vue.s * 0.07 : 0), c.pierre, {});
+  }
+
+  // badges de prévision (au-dessus des pierres pour rester lisibles)
+  for (const cle in marquage) {
+    if (!caseEmergee(st, cle)) continue;
+    const p = hexToPixelCle(cle);
+    dessinerBadge(p.x, p.y - vue.s * 0.55, marquage[cle], t);
+  }
+
+  dessinerAnims(t);
+}
+
+function boucle(t) {
+  majAnims(t);
+  dessiner(t);
+  requestAnimationFrame(boucle);
+}
+
+/* =====================================================================
+   9. HUD, TOASTS, MODALES
+   ===================================================================== */
+
+function nomJoueur(j) { return j === 'azur' ? 'Azur' : 'Corail'; }
+
+function toast(texte, type) {
+  const cont = document.getElementById('toasts');
+  while (cont.children.length >= 4) cont.removeChild(cont.firstChild);
+  const el = document.createElement('div');
+  el.className = 'toast' + (type ? ' ' + type : '');
+  el.textContent = texte;
+  cont.appendChild(el);
+  setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 3000);
+}
+
+function dessinerIconeVague() {
+  const cv = document.getElementById('canvas-vague');
+  const dpr = window.devicePixelRatio || 1;
+  if (cv.width !== Math.round(34 * dpr)) {
+    cv.width = Math.round(34 * dpr);
+    cv.height = Math.round(16 * dpr);
+  }
+  const c2 = cv.getContext('2d');
+  c2.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c2.clearRect(0, 0, 34, 16);
+  const img = Assets.asset('common/icone_vague', 34);
+  if (img) { c2.drawImage(img, 0, 0, 34, 16); return; }
+  c2.strokeStyle = 'rgba(159, 232, 224, 0.9)';
+  c2.lineWidth = 1.6;
+  c2.lineCap = 'round';
+  for (let l = 0; l < 2; l++) {
+    c2.beginPath();
+    for (let x = 0; x <= 32; x++) {
+      const y = 5.5 + l * 5 + Math.sin(x / 4.2 + l * 1.4) * 1.9;
+      if (x === 0) c2.moveTo(x, y); else c2.lineTo(x, y);
+    }
+    c2.stroke();
+  }
+}
+
+function majHUD() {
+  const st = ui.state;
+  if (!st) return;
+  const t = compterPierres(st);
+  for (const j of JOUEURS) {
+    const cont = document.getElementById('reserve-' + j);
+    cont.innerHTML = '';
+    for (let i = 0; i < RESERVE_INITIALE; i++) {
+      const sp = document.createElement('span');
+      sp.className = 'pastille ' + j + (i < st.reserve[j] ? '' : ' utilisee');
+      cont.appendChild(sp);
+    }
+    document.getElementById('info-' + j).textContent =
+      'réserve ' + st.reserve[j] + ' / ' + RESERVE_INITIALE + ' · ' + t[j] + ' sur l’archipel';
+    document.getElementById('panneau-' + j).classList.toggle('actif', !st.fini && st.joueur === j);
+  }
+  let bandeau;
+  if (st.fini) {
+    bandeau = 'Partie terminée — demi-tour ' + st.demiTour;
+  } else if (mode === 'ia' && st.joueur === 'corail') {
+    bandeau = 'L’IA réfléchit… — demi-tour ' + st.demiTour;
+  } else if (mode === 'enligne' && net.demarree) {
+    if (net.enAttente) bandeau = 'Coup transmis — l’hôte arbitre la partie… — demi-tour ' + st.demiTour;
+    else if (st.joueur === net.role) bandeau = 'À vous de jouer (' + nomJoueur(net.role) + ') — demi-tour ' + st.demiTour;
+    else bandeau = 'Au tour de l’adversaire (' + nomJoueur(st.joueur) + ') — demi-tour ' + st.demiTour;
+  } else {
+    bandeau = 'Au tour de ' + nomJoueur(st.joueur) + ' — demi-tour ' + st.demiTour;
+  }
+  document.getElementById('demi-tour').textContent = bandeau;
+  const mEl = document.getElementById('texte-maree');
+  if (st.evenementsFaits >= NB_EVENEMENTS) {
+    mEl.textContent = 'Calendrier des marées épuisé';
+    mEl.classList.remove('imminent');
+  } else {
+    const restants = PERIODE_MAREE - ((st.demiTour - 1) % PERIODE_MAREE);
+    mEl.textContent = restants === 1
+      ? 'Marée à la fin de ce demi-tour !'
+      : 'Prochaine marée dans ' + restants + ' demi-tours';
+    mEl.classList.toggle('imminent', restants === 1);
+  }
+  document.getElementById('compte-marees').textContent =
+    'Marées survenues : ' + st.evenementsFaits + ' / ' + NB_EVENEMENTS +
+    ' · ' + nbEmergees(st) + ' cases émergées';
+  dessinerIconeVague();
+}
+
+function phraseFin(st) {
+  let r;
+  if (st.raisonFin === 'calendrier') r = 'La 18ᵉ et dernière marée a frappé : le calendrier est épuisé.';
+  else if (st.raisonFin === 'archipel') r = 'Il ne reste que ' + nbEmergees(st) + ' cases émergées : l’archipel a trop rétréci.';
+  else r = nomJoueur(st.detailFin && st.detailFin.joueur || st.joueur) + ' ne peut plus agir.';
+  const t = compterPierres(st);
+  return r + ' Pierres sur l’archipel — Azur ' + t.azur + ' · Corail ' + t.corail + '.';
+}
+
+function montrerFin() {
+  const st = ui.state;
+  if (!st || !st.fini) return;
+  const t = compterPierres(st);
+  const titre = document.getElementById('fin-titre');
+  titre.textContent = st.vainqueur === 'egalite' ? 'ÉGALITÉ' : 'VICTOIRE ' + st.vainqueur.toUpperCase();
+  titre.className = 'titre-fin ' + (st.vainqueur === 'egalite' ? 'or' : st.vainqueur);
+  document.getElementById('fin-phrase').textContent = phraseFin(st);
+  document.getElementById('fin-score').textContent =
+    t.azur + ' pierre' + (t.azur > 1 ? 's' : '') + ' azur contre ' + t.corail + ' pierre' + (t.corail > 1 ? 's' : '') + ' corail';
+  document.getElementById('voile-fin').classList.add('visible');
+}
+
+/* =====================================================================
+   10. DÉROULEMENT D'UN COUP (UI → moteur → animations → HUD)
+   ===================================================================== */
+
+// Joue les effets visuels/sonores d'un journal du moteur (coups, captures,
+// marées, fin) — partagé par le jeu local, l'IA et les vues distantes.
+function animerEtApres(journal) {
+  const st = ui.state;
+  ui.selection = null;
+  ui.dests = [];
+
+  if (journal.placement) {
+    cachees[journal.placement] = true;
+    ajouterAnim({ type: 'place', cle: journal.placement, cleFin: journal.placement, couleur: journal.joueur, dur: 240 });
+    if (st.reserve[journal.joueur] === 0) {
+      setTimeout(() => toast('Réserve de ' + nomJoueur(journal.joueur) + ' vide : désormais, déplacements uniquement.', 'info'), 350);
+    }
+  }
+  if (journal.deplacement) {
+    cachees[journal.deplacement.vers] = true;
+    ajouterAnim({
+      type: 'move', cle: journal.deplacement.de, cleFin: journal.deplacement.vers,
+      vers: journal.deplacement.vers, couleur: journal.joueur, dur: 330
+    });
+  }
+  if (journal.captures.length) {
+    const adv = adversaire(journal.joueur);
+    const n = journal.captures.length;
+    toast(nomJoueur(journal.joueur) + ' capture ' + (n === 1 ? 'une pierre' : n + ' pierres') + ' ' + (n === 1 ? '' : '') + nomJoueur(adv).toLowerCase() + (n > 1 ? 's' : '') + '.', 'capture');
+    for (const cap of journal.captures) {
+      ajouterAnim({ type: 'capture', cle: cap.cle, couleur: cap.couleur, dur: 480, delay: 60 });
+    }
+  }
+  if (journal.maree) {
+    const m = journal.maree;
+    ui.bloque = true;
+    rendu.terreSale = true;
+    let noyees = 0;
+    for (const dc of m.cases) {
+      ajouterAnim({ type: 'submersion', cle: dc.cle, dur: 880, delay: 130 });
+      for (const couleur of dc.noyees) {
+        noyees++;
+        ajouterAnim({ type: 'noyade', cle: dc.cle, couleur: couleur, dur: 760, delay: 180 });
+      }
+    }
+    let txt = 'Marée n° ' + m.numero + ' : ' + (m.cases.length > 1 ? '2 cases englouties' : 'une case engloutie');
+    if (noyees === 1) txt += ', une pierre se noie';
+    else if (noyees > 1) txt += ', ' + noyees + ' pierres se noient';
+    toast(txt + '.', 'maree');
+    const monId = idPartie;
+    setTimeout(() => { if (monId === idPartie) ui.bloque = false; }, 1020);
+  }
+  majHUD();
+  if (journal.fin) {
+    const monId = idPartie;
+    setTimeout(() => { if (monId === idPartie) montrerFin(); }, journal.maree ? 1150 : 620);
+  }
+}
+
+// Point d'entrée unique d'un coup joué au clic :
+// hotseat/IA → moteur local ; en ligne, Azur arbitre et Corail transmet.
+function appliquer(action) {
+  if (mode === 'enligne' && net.role === 'corail') { envoyerCoupCorail(action); return; }
+  const journal = jouerAction(ui.state, action);
+  if (journal.erreur) {
+    toast(journal.erreur, 'avertissement');
+    return;
+  }
+  animerEtApres(journal);
+  if (mode === 'enligne' && net.role === 'azur') diffuserEtat(journal);
+  if (mode === 'ia' && !ui.state.fini && ui.state.joueur === 'corail') planifierIA();
+}
+
+function nouvellePartie(silencieux) {
+  idPartie++;
+  ui.state = nouvellePartieLogique();
+  ui.selection = null;
+  ui.dests = [];
+  ui.hover = null;
+  ui.bloque = false;
+  viderAnims();
+  rendu.terreSale = true;
+  document.getElementById('voile-fin').classList.remove('visible');
+  majHUD();
+  if (!silencieux) toast('Nouvelle partie — Azur commence. Première marée dans 6 demi-tours.', 'info');
+}
+
+/* =====================================================================
+   11. INTERACTIONS
+   ===================================================================== */
+
+function positionSouris(ev) {
+  const rect = canvas.getBoundingClientRect();
+  return { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+}
+
+canvas.addEventListener('click', (ev) => {
+  if (!aMonTour()) return;
+  const st = ui.state;
+  const pos = positionSouris(ev);
+  const cle = pixelVersCle(pos.x, pos.y);
+  const c = caseEmergee(st, cle);
+  if (!c) { ui.selection = null; ui.dests = []; return; }
+
+  if (c.pierre === st.joueur) {
+    // sélection / désélection d'une de ses pierres
+    if (ui.selection === cle) { ui.selection = null; ui.dests = []; }
+    else {
+      ui.selection = cle;
+      ui.dests = deplacementsLegauxDepuis(st, cle);
+      if (ui.dests.length === 0) toast('Cette pierre ne peut aller nulle part (aucune case libre à distance ≤ 2).', 'avertissement');
+    }
+    return;
+  }
+  if (c.pierre) {
+    toast('Cette pierre appartient à ' + nomJoueur(c.pierre) + '.', 'info');
+    return;
+  }
+  // case libre : destination de déplacement, ou placement
+  if (ui.selection) {
+    if (ui.dests.indexOf(cle) !== -1) {
+      appliquer({ type: 'deplacer', de: ui.selection, vers: cle });
+    } else {
+      toast('Destination interdite : distance hexagonale maximale de 2.', 'avertissement');
+    }
+    return;
+  }
+  if (st.reserve[st.joueur] > 0) {
+    appliquer({ type: 'placer', cle: cle });
+  } else {
+    toast('Réserve vide — cliquez une de vos pierres pour la déplacer.', 'avertissement');
+  }
+});
+
+canvas.addEventListener('mousemove', (ev) => {
+  if (!ui.state) return;
+  const pos = positionSouris(ev);
+  ui.hover = pixelVersCle(pos.x, pos.y);
+  const st = ui.state;
+  const c = caseEmergee(st, ui.hover);
+  let pointeur = false;
+  if (c && aMonTour()) {
+    pointeur = (!c.pierre && st.reserve[st.joueur] > 0) ||
+               c.pierre === st.joueur ||
+               ui.dests.indexOf(ui.hover) !== -1;
+  }
+  canvas.style.cursor = pointeur ? 'pointer' : 'default';
+});
+canvas.addEventListener('mouseleave', () => { ui.hover = null; });
+
+document.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Escape') return;
+  const regles = document.getElementById('voile-regles');
+  if (regles.classList.contains('visible')) { regles.classList.remove('visible'); return; }
+  ui.selection = null;
+  ui.dests = [];
+});
+
+document.getElementById('btn-nouvelle').addEventListener('click', nouvellePartie);
+document.getElementById('btn-rejouer').addEventListener('click', () => {
+  if (mode === 'enligne') { quitterSalon(); return; }
+  nouvellePartie();
+});
+document.getElementById('btn-quitter').addEventListener('click', quitterSalon);
+document.getElementById('btn-regles').addEventListener('click', () => {
+  document.getElementById('voile-regles').classList.add('visible');
+});
+document.getElementById('fermer-regles').addEventListener('click', () => {
+  document.getElementById('voile-regles').classList.remove('visible');
+});
+document.getElementById('fermer-regles-2').addEventListener('click', () => {
+  document.getElementById('voile-regles').classList.remove('visible');
+});
+document.getElementById('voile-regles').addEventListener('click', (ev) => {
+  if (ev.target === ev.currentTarget) ev.currentTarget.classList.remove('visible');
+});
+
+window.addEventListener('resize', () => { redimensionner(); majHUD(); });
+
+/* =====================================================================
+   12. MODES DE JEU, ÉCRAN D'ACCUEIL, ÉTIQUETTES
+   ===================================================================== */
+
+let mode = 'accueil';        // 'accueil' | 'hotseat' | 'ia' | 'enligne'
+let niveauIA = 'normal';     // 'facile' | 'normal'
+const fileStatut = document.getElementById('accueil-file-statut');
+
+function montrerAccueil(vue) {
+  document.getElementById('voile-accueil').classList.add('visible');
+  document.getElementById('accueil-menu').hidden = vue !== 'menu';
+  document.getElementById('accueil-ia').hidden = vue !== 'ia';
+  document.getElementById('accueil-file').hidden = vue !== 'file';
+}
+function cacherAccueil() {
+  document.getElementById('voile-accueil').classList.remove('visible');
+}
+
+function majEtiquettes() {
+  const nA = document.querySelector('#panneau-azur .nom');
+  const nC = document.querySelector('#panneau-corail .nom');
+  let a = 'AZUR', c = 'CORAIL';
+  if (mode === 'ia') { a = 'AZUR — vous'; c = 'CORAIL — IA'; }
+  else if (mode === 'enligne' && net.role) {
+    if (net.role === 'azur') { a = 'AZUR — vous, hôte'; c = 'CORAIL — distant'; }
+    else { a = 'AZUR — distant, hôte'; c = 'CORAIL — vous'; }
+  }
+  nA.textContent = a;
+  nC.textContent = c;
+}
+
+function majModeHeader() {
+  document.getElementById('btn-nouvelle').hidden = (mode === 'enligne');
+  document.getElementById('btn-quitter').hidden = (mode !== 'enligne');
+  document.getElementById('btn-rejouer').textContent = (mode === 'enligne') ? 'Quitter le salon' : 'Rejouer';
+  majEtiquettes();
+  majHUD();
+}
+
+// Le clic n'agit que si le joueur LOCAL peut jouer : hotseat → toujours ;
+// IA → Azur seulement ; en ligne → son rôle, hors attente de l'arbitre.
+function aMonTour() {
+  if (!ui.state || ui.state.fini || ui.bloque) return false;
+  if (mode === 'ia') return ui.state.joueur === 'azur';
+  if (mode === 'enligne') return net.demarree && !net.enAttente && ui.state.joueur === net.role;
+  return true;
+}
+
+function demarrerHotseat() {
+  mode = 'hotseat';
+  majModeHeader();
+  cacherAccueil();
+  nouvellePartie();
+}
+
+function demarrerIA(n) {
+  niveauIA = n;
+  mode = 'ia';
+  majModeHeader();
+  cacherAccueil();
+  nouvellePartie(true);
+  toast('Vous jouez Azur — l’IA (' + n + ') joue Corail. À vous de commencer.', 'info');
+}
+
+/* =====================================================================
+   13. IA (Corail) — décide sur les informations PUBLIQUES uniquement :
+       plateau visible + prévision 3 marées. Jamais le calendrier secret.
+   ===================================================================== */
+// #IA-DEBUT (zone pure, sans DOM — extractible pour auto-contrôle Node)
+
+function choisirCoupIA(st, niveau) {
+  const coups = actionsLegales(st);
+  if (coups.length === 0) return null;
+  if (niveau !== 'normal' && Math.random() < 0.6) {
+    return coups[Math.floor(Math.random() * coups.length)];   // Facile : ~60 % aléatoire légal
+  }
+  const marq = prevision(st);   // prévision publique (badges 3·2·1)
+  let meilleur = null, meilleurScore = -Infinity;
+  for (let i = 0; i < coups.length; i++) {
+    const s = evaluerCoupIA(st, coups[i], marq) + Math.random() * 0.25;
+    if (s > meilleurScore) { meilleurScore = s; meilleur = coups[i]; }
+  }
+  return meilleur || coups[0];
+}
+
+// Heuristique Normal : capturer, sauver, menacer, durer, connecter, contrer.
+function evaluerCoupIA(st, coup, marq) {
+  const ia = st.joueur, adv = adversaire(ia);
+
+  // Simulation légère (mécanique publique uniquement) : positions après le coup.
+  const pierres = {};
+  for (const cle in st.cases) {
+    const c = st.cases[cle];
+    if (!c.submerge && c.pierre) pierres[cle] = c.pierre;
+  }
+  if (coup.type === 'placer') pierres[coup.cle] = ia;
+  else { delete pierres[coup.de]; pierres[coup.vers] = ia; }
+
+  // Captures immédiates (≥ 4 voisins existants occupés par l'IA).
+  const capturees = [];
+  for (const cle in pierres) {
+    if (pierres[cle] !== adv) continue;
+    const vs = voisinsExistants(st, cle);
+    let n = 0;
+    for (let i = 0; i < vs.length; i++) if (pierres[vs[i]] === ia) n++;
+    if (n >= 4) capturees.push(cle);
+  }
+  for (let i = 0; i < capturees.length; i++) delete pierres[capturees[i]];
+  let score = 11 * capturees.length;
+
+  const cible = coup.type === 'placer' ? coup.cle : coup.vers;
+  const bCible = marq[cible] || 0;   // 0 = hors prévision = longue durée de vie espérée
+
+  // Présence durable : éviter les badges 1-2, sauf capture immédiate.
+  if (bCible === 1) score -= capturees.length ? 1 : 9;
+  else if (bCible === 2) score -= capturees.length ? 0.5 : 4.5;
+  else if (bCible === 3) score -= 1;
+  else score += 2.2;
+
+  if (coup.type === 'deplacer') {
+    const bDep = marq[coup.de] || 0;
+    if (bDep >= 1 && bCible < bDep) score += 3.5 + 1.8 * (bDep - bCible);   // sauver une pierre condamnée
+    else if (bCible > bDep && bCible >= 1) score -= 2.5 * (bCible - bDep);  // se mettre en danger
+  }
+
+  // Menaces : pierres adverses capturables au prochain tour (3 voisins IA).
+  let menaces = 0;
+  for (const cle in pierres) {
+    if (pierres[cle] !== adv) continue;
+    const vs = voisinsExistants(st, cle);
+    if (vs.length < 4) continue;             // géographie : capture impossible ici
+    let n = 0;
+    for (let i = 0; i < vs.length; i++) if (pierres[vs[i]] === ia) n++;
+    if (n === 3) menaces++;
+  }
+  score += 2.4 * menaces;
+
+  // Connexion du groupe + ne pas s'offrir à l'encerclement.
+  const vsC = voisinsExistants(st, cible);
+  let allies = 0, ennemisAdj = 0;
+  for (let i = 0; i < vsC.length; i++) {
+    if (pierres[vsC[i]] === ia) allies++;
+    else if (pierres[vsC[i]] === adv) ennemisAdj++;
+  }
+  score += 0.9 * allies;
+  if (ennemisAdj >= 3) score -= 4;
+
+  // Contrer près des zones sûres : ennemis durables à distance ≤ 2 de la cible.
+  const cc = st.cases[cible];
+  let zoneSure = 0;
+  for (const cle in pierres) {
+    if (pierres[cle] !== adv || marq[cle]) continue;
+    const o = st.cases[cle];
+    if (hexDist(cc.q, cc.r, o.q, o.r) <= 2) zoneSure++;
+  }
+  score += 0.7 * zoneSure;
+
+  if (coup.type === 'placer') score += 1.4;   // les pierres restées en réserve ne comptent pas à la fin
+  return score;
+}
+// #IA-FIN
+
+// Tour de l'IA : pas d'écran de passage, un bandeau « L’IA réfléchit… »
+// pendant ~800 ms, puis coup joué avec les animations normales.
+function planifierIA() {
+  const monId = idPartie;
+  setTimeout(function () {
+    if (monId !== idPartie || !ui.state || ui.state.fini || ui.state.joueur !== 'corail') return;
+    const coup = choisirCoupIA(ui.state, niveauIA);
+    if (!coup) return;
+    const journal = jouerAction(ui.state, coup);
+    if (!journal.erreur) animerEtApres(journal);
+  }, 800);
+}
+
+/* =====================================================================
+   14. EN LIGNE — salons LOB7 (SDK LOB7Rooms, copie inline plus haut)
+       Azur = hôte-arbitre : détient l'état ET le calendrier secret.
+       Corail envoie ses coups ; Azur valide, applique, diffuse la vue.
+       Seule info filtrée pour Corail : le calendrier — il reçoit les
+       submersions passées + la prévision des 3 prochains événements.
+   ===================================================================== */
+
+const net = {
+  connexion: null, arret: null, veille: null,
+  monId: null, autreId: null, role: null, hellos: {},
+  demarree: false, numVue: -1, clesTraitees: {},
+  enAttente: false, quitte: false, perdue: false, dernierRecu: 0
+};
+let sessionReseau = 0;   // invalide les callbacks d'une session annulée
+
+function idClient() {
+  const b = new Uint8Array(8);
+  crypto.getRandomValues(b);
+  let s = '';
+  for (let i = 0; i < b.length; i++) s += b[i].toString(16).padStart(2, '0');
+  return s;
+}
+
+function reinitialiserNet() {
+  if (net.veille) clearInterval(net.veille);
+  net.connexion = null; net.arret = null; net.veille = null;
+  net.monId = null; net.autreId = null; net.role = null; net.hellos = {};
+  net.demarree = false; net.numVue = -1; net.clesTraitees = {};
+  net.enAttente = false; net.quitte = false; net.perdue = false; net.dernierRecu = 0;
+}
+
+// #CODEC-VUE-DEBUT (zone pure — extractible pour auto-contrôle Node)
+// Vue diffusée à Corail : plateau complet SANS calendrier secret.
+function encoderVue(st, num, journal) {
+  const cases = [];
+  for (const cle in st.cases) {
+    const c = st.cases[cle];
+    cases.push([cle, c.submerge ? 1 : 0, c.pierre === 'azur' ? 1 : (c.pierre === 'corail' ? 2 : 0)]);
+  }
+  return {
+    num: num, cases: cases,
+    reserve: { azur: st.reserve.azur, corail: st.reserve.corail },
+    joueur: st.joueur, demiTour: st.demiTour, evenementsFaits: st.evenementsFaits,
+    fini: st.fini, vainqueur: st.vainqueur, raisonFin: st.raisonFin, detailFin: st.detailFin,
+    prevision: prevision(st),        // prévision publique : 3 prochains événements
+    journal: journal || null
+  };
+}
+
+function decoderVue(p) {
+  const cases = {};
+  for (let i = 0; i < p.cases.length; i++) {
+    const e = p.cases[i];
+    const qr = parserCle(e[0]);
+    cases[e[0]] = {
+      q: qr[0], r: qr[1], submerge: e[1] === 1,
+      pierre: e[2] === 1 ? 'azur' : (e[2] === 2 ? 'corail' : null)
+    };
+  }
+  return {
+    cases: cases,
+    reserve: { azur: p.reserve.azur, corail: p.reserve.corail },
+    joueur: p.joueur, demiTour: p.demiTour,
+    calendrier: [],                     // volontairement vide côté Corail
+    evenementsFaits: p.evenementsFaits,
+    fini: !!p.fini, vainqueur: p.vainqueur || null,
+    raisonFin: p.raisonFin || null, detailFin: p.detailFin || null,
+    previsionPublique: p.prevision || {}   // la prévision tient lieu de calendrier
+  };
+}
+// #CODEC-VUE-FIN
+
+function envoyerMessage(data, discret) {
+  if (!net.connexion) return;
+  net.connexion.send(data).catch(function (err) {
+    if (err && err.code === 'ROOM_CONNECTION_CLOSED') { connexionPerdue(); return; }
+    if (!discret) toast('Envoi impossible (' + ((err && err.code) || 'erreur') + ').', 'avertissement');
+    sonderConnexion();
+  });
+}
+
+// Une erreur d'abonnement peut être fatale (ROOM_EXPIRED…) ou transitoire :
+// on sonde ; si la lecture échoue aussi, la connexion est perdue.
+function sonderConnexion() {
+  if (!net.connexion || net.quitte || net.perdue) return;
+  net.connexion.read({ after: 0, limit: 1 }).catch(function () { connexionPerdue(); });
+}
+
+function connexionPerdue() {
+  if (net.perdue || net.quitte) return;
+  net.perdue = true;
+  toast('Connexion perdue.', 'avertissement');
+  retourAccueil('Connexion perdue — retour à l’accueil.');
+}
+
+// --- Connexion, élection du plus petit clientId -------------------------
+
+function demarrerEnLigne() {
+  montrerAccueil('file');
+  fileStatut.textContent = 'Connexion au salon LOB7…';
+  if (typeof LOB7Rooms !== 'object' || typeof LOB7Rooms.connect !== 'function') {
+    horsLob7('SDK LOB7 introuvable.');
+    return;
+  }
+  sessionReseau++;
+  const maSession = sessionReseau;
+  LOB7Rooms.connect().then(function (conn) {
+    if (maSession !== sessionReseau) return;   // annulé entre-temps
+    net.connexion = conn;
+    net.monId = idClient();
+    net.arret = conn.subscribe(surMessageRoom, { onError: function () { sonderConnexion(); } });
+    fileStatut.textContent = 'Salon rejoint — en attente de l’autre joueur…';
+    envoyerMessage({ type: 'hello', clientId: net.monId });
+  }).catch(function (err) {
+    if (maSession !== sessionReseau) return;
+    horsLob7(err && err.message ? err.message : '');
+  });
+}
+
+// Hors LOB7 (ROOM_PREVIEW_REQUIRED, ROOM_BRIDGE_UNAVAILABLE…) :
+// message dédié et retour à l'accueil.
+function horsLob7(detail) {
+  toast('Le mode en ligne nécessite lob7.com.', 'avertissement');
+  montrerAccueil('menu');
+  document.getElementById('accueil-note').textContent =
+    'Le mode en ligne nécessite lob7.com — ouvrez le jeu depuis son salon lob7.com.' +
+    (detail ? ' (' + detail + ')' : '');
+}
+
+function surMessageRoom(message) {
+  const m = message && message.data;
+  if (!m || typeof m !== 'object' || !m.type) return;
+  if ((m.clientId && m.clientId === net.autreId) || (m.de && m.de === net.autreId)) {
+    net.dernierRecu = Date.now();
+  }
+  if (m.type === 'hello') { surHello(m); return; }
+  if (m.type === 'ping') return;
+  if (m.type === 'depart') {
+    if (m.de === net.autreId) {
+      toast('L’adversaire a quitté le salon.', 'avertissement');
+      retourAccueil('L’adversaire a quitté le salon.');
+    }
+    return;
+  }
+  if (m.de !== net.autreId) return;   // échos propres et tiers : ignorés
+  if (m.type === 'action') surActionDistante(m);
+  else if (m.type === 'vue' || m.type === 'fin') surVueDistante(m);
+}
+
+function surHello(m) {
+  if (net.demarree) return;
+  const id = String(m.clientId || '');
+  if (!id || id === net.monId || net.hellos[id]) return;
+  net.hellos[id] = true;
+  evaluerElection();
+}
+
+// Élection déterministe : plus petit clientId = Azur (hôte-arbitre).
+function evaluerElection() {
+  if (net.demarree || !net.monId) return;
+  const ids = Object.keys(net.hellos).concat([net.monId]).sort();
+  net.autreId = ids[0] === net.monId ? ids[1] : ids[0];
+  if (!net.autreId) return;
+  net.role = net.monId < net.autreId ? 'azur' : 'corail';
+  demarrerPartieEnLigne();
+}
+
+function demarrerPartieEnLigne() {
+  net.demarree = true;
+  mode = 'enligne';
+  majModeHeader();
+  if (net.role === 'azur') {
+    cacherAccueil();
+    nouvellePartie(true);   // l'hôte détient l'état ET le calendrier secret
+    net.numVue = 0;
+    envoyerMessage({ type: 'vue', pour: 'corail', de: net.monId, payload: encoderVue(ui.state, 0, null) });
+    majHUD();
+    toast('Vous êtes Azur — hôte et arbitre technique. À vous de commencer.', 'info');
+  } else {
+    net.numVue = -1;
+    montrerAccueil('file');
+    fileStatut.textContent = 'Vous êtes Corail — l’hôte (Azur) prépare la partie…';
+  }
+  activerVeilleReseau();
+}
+
+// Garde-fou présence : ping toutes les 20 s ; si aucun message de l'autre
+// joueur pendant 120 s (onglet fermé…), la connexion est déclarée perdue.
+function activerVeilleReseau() {
+  if (net.veille) return;
+  net.dernierRecu = Date.now();
+  net.veille = setInterval(function () {
+    if (mode !== 'enligne' || !net.demarree || net.perdue || net.quitte || !net.connexion) return;
+    envoyerMessage({ type: 'ping', de: net.monId }, true);
+    if (Date.now() - net.dernierRecu > 120000) connexionPerdue();
+  }, 20000);
+}
+
+// --- Coups ---------------------------------------------------------------
+
+function envoyerCoupCorail(action) {
+  if (!net.demarree || net.role !== 'corail') return;
+  net.enAttente = true;
+  ui.selection = null;
+  ui.dests = [];
+  envoyerMessage({ type: 'action', de: net.monId, coup: action, cle: idClient() });
+  majHUD();
+}
+
+// Côté Azur (arbitre) : validation, application, diffusion — idempotent par cle.
+function surActionDistante(m) {
+  if (net.role !== 'azur' || !net.demarree || !ui.state) return;
+  if (m.cle && net.clesTraitees[m.cle]) return;   // idempotence par cle
+  if (m.cle) net.clesTraitees[m.cle] = true;
+  if (ui.state.fini || ui.state.joueur !== 'corail') { resynchroniserCorail(); return; }
+  const journal = jouerAction(ui.state, m.coup);
+  if (journal.erreur) {
+    toast('Coup distant refusé : ' + journal.erreur, 'avertissement');
+    resynchroniserCorail();
+    return;
+  }
+  animerEtApres(journal);
+  diffuserEtat(journal);
+}
+
+function resynchroniserCorail() {
+  net.numVue++;
+  envoyerMessage({ type: 'vue', pour: 'corail', de: net.monId, payload: encoderVue(ui.state, net.numVue, null) });
+}
+
+function diffuserEtat(journal) {
+  net.numVue++;
+  let payload = encoderVue(ui.state, net.numVue, journal);
+  try {
+    if (JSON.stringify(payload).length > 8192) payload = encoderVue(ui.state, net.numVue, null);
+  } catch (e) { payload = encoderVue(ui.state, net.numVue, null); }
+  // La victoire est prononcée par l'hôte : message « fin » dédié.
+  envoyerMessage({ type: ui.state.fini ? 'fin' : 'vue', pour: 'corail', de: net.monId, payload: payload });
+}
+
+// Côté Corail : application des vues de l'hôte (idempotence par num).
+function surVueDistante(m) {
+  if (net.role !== 'corail' || !net.demarree) return;
+  const p = m.payload;
+  if (!p || typeof p.num !== 'number' || p.num <= net.numVue) return;
+  net.numVue = p.num;
+  appliquerVueDistante(p);
+}
+
+function appliquerVueDistante(p) {
+  idPartie++;
+  ui.state = decoderVue(p);
+  ui.selection = null; ui.dests = []; ui.hover = null; ui.bloque = false;
+  net.enAttente = false;
+  viderAnims();
+  rendu.terreSale = true;
+  document.getElementById('voile-fin').classList.remove('visible');
+  cacherAccueil();
+  if (p.journal) animerEtApres(p.journal); else majHUD();
+}
+
+// --- Départs --------------------------------------------------------------
+
+function quitterSalon() {
+  if (net.connexion && net.demarree) {
+    envoyerMessage({ type: 'depart', de: net.monId }, true);   // prévenir l'autre joueur
+  }
+  toast('Vous avez quitté le salon.', 'info');
+  retourAccueil('');
+}
+
+function retourAccueil(message) {
+  sessionReseau++;
+  if (net.arret) { try { net.arret(); } catch (e) { /* abonnement déjà arrêté */ } }
+  reinitialiserNet();
+  mode = 'accueil';
+  majModeHeader();
+  nouvellePartie(true);
+  montrerAccueil('menu');
+  document.getElementById('accueil-note').textContent = message || '';
+}
+
+/* ---------- Câblage des boutons de l'accueil ---------- */
+document.getElementById('btn-hotseat').addEventListener('click', demarrerHotseat);
+document.getElementById('btn-ia').addEventListener('click', () => montrerAccueil('ia'));
+document.getElementById('btn-ia-facile').addEventListener('click', () => demarrerIA('facile'));
+document.getElementById('btn-ia-normal').addEventListener('click', () => demarrerIA('normal'));
+document.getElementById('btn-ia-retour').addEventListener('click', () => montrerAccueil('menu'));
+document.getElementById('btn-enligne').addEventListener('click', demarrerEnLigne);
+document.getElementById('btn-annuler-file').addEventListener('click', () => retourAccueil(''));
+document.getElementById('btn-regles-accueil').addEventListener('click', () => {
+  document.getElementById('voile-regles').classList.add('visible');
+});
+
+/* =====================================================================
+   15. INIT
+   ===================================================================== */
+
+Assets.init();
+redimensionner();
+nouvellePartie(true);   // archipel vivant en fond derrière l'écran d'accueil
+montrerAccueil('menu');
+majModeHeader();
+requestAnimationFrame(boucle);
+</script>
+</body>
+</html>
