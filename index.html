@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MARÉES — Un Go mouvant sur un archipel qui coule</title>
+<title>MARÉES</title>
 <style>
   :root {
     --azur: #6ec8ff;    /* pierres Azur — inchangé */
@@ -15,6 +15,7 @@
     --bord: #1d5a66;    /* bord des panneaux */
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { height: 100%; }
   body {
     margin: 0;
@@ -31,6 +32,7 @@
     display: flex; align-items: center; justify-content: space-between;
     gap: 16px; flex-wrap: wrap;
     padding: 12px 26px 10px;
+    position: relative; z-index: 200;   /* au-dessus des voiles : FR/EN toujours accessible */
   }
   h1 {
     font-family: Georgia, "Times New Roman", serif;
@@ -185,22 +187,75 @@
   #fin-score { font-size: 16px; margin: 6px 0 2px; }
   #btn-rejouer { margin-top: 14px; padding: 10px 26px; font-size: 14px; letter-spacing: .1em; }
 
-  /* ---------- Écran d'accueil ---------- */
-  .panneau.accueil { max-width: 440px; text-align: center; }
-  .panneau.accueil h2 { font-size: 34px; letter-spacing: .4em; margin-bottom: 2px; }
-  .sous-titre-accueil { margin: 0 0 4px; font-style: italic; opacity: .8; font-size: 13.5px; }
-  .menu-accueil { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
-  .menu-accueil[hidden] { display: none; }
-  .menu-accueil .choix {
-    display: flex; flex-direction: column; gap: 2px;
-    padding: 13px 16px; font-size: 15px; letter-spacing: .05em; border-radius: 10px;
+  /* ---------- Écran d'accueil (optimisé capture automatique) ----------
+     Voile léger : l'archipel vivant reste bien visible derrière l'accueil.
+     Le bouton principal est ancré au CENTRE EXACT de l'écran (≥ 220×90 px). */
+  #voile-accueil { background: rgba(4, 24, 30, .32); padding: 0; }
+  .accueil-scene { position: absolute; inset: 0; }
+  .accueil-haut { position: absolute; top: clamp(16px, 6vh, 56px); left: 0; right: 0; text-align: center; }
+  .accueil-titre {
+    font-family: Georgia, "Times New Roman", serif;
+    font-weight: 400; font-size: 34px; letter-spacing: .4em;
+    margin: 0; color: var(--accent);
+    text-shadow: 0 0 22px rgba(53, 208, 197, .45), 0 2px 8px rgba(4, 24, 30, .9);
   }
-  .menu-accueil .choix .precis { font-size: 11px; opacity: .6; font-style: italic; letter-spacing: .02em; }
+  .sous-titre-accueil {
+    margin: 2px 0 0; font-style: italic; opacity: .85; font-size: 13.5px;
+    text-shadow: 0 1px 6px rgba(4, 24, 30, .9);
+  }
+  .cta-ia {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    min-width: 250px; min-height: 104px; padding: 16px 34px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    font-size: 19px; letter-spacing: .05em; border-radius: 14px;
+    background: rgba(10, 50, 60, .82);
+    border: 2px solid rgba(53, 208, 197, .8);
+    box-shadow: 0 0 36px rgba(53, 208, 197, .28), 0 10px 30px rgba(0, 0, 0, .45);
+    z-index: 2;
+  }
+  .cta-ia:hover {
+    background: rgba(14, 63, 74, .92);
+    box-shadow: 0 0 44px rgba(53, 208, 197, .4), 0 10px 30px rgba(0, 0, 0, .45);
+  }
+  .cta-ia .cta-titre { letter-spacing: .08em; }
+  .cta-ia .precis { font-size: 12px; opacity: .7; font-style: italic; letter-spacing: .02em; }
+  .accueil-bas {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, 84px);
+    width: min(92vw, 360px); display: flex; flex-direction: column; align-items: center; gap: 10px;
+  }
+  .accueil-niveaux {
+    margin: 0; font-size: 11px; font-style: italic; color: rgba(242, 227, 194, .66);
+    text-align: center; text-shadow: 0 1px 5px rgba(4, 24, 30, .9);
+  }
+  .accueil-secondaires { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+  .choix.secondaire {
+    display: flex; flex-direction: column; gap: 2px; align-items: center;
+    padding: 9px 14px; font-size: 13.5px; letter-spacing: .04em; border-radius: 10px;
+    background: rgba(10, 50, 60, .78);
+  }
+  .choix.secondaire .precis { font-size: 10.5px; opacity: .6; font-style: italic; letter-spacing: .02em; }
   .sous-choix { padding: 6px 14px; font-size: 12px; }
-  .menu-accueil .sous-choix { align-self: center; }
-  .accueil-regles { margin-top: 14px; }
-  #accueil-file-statut { margin: 6px 0 0; font-size: 13.5px; }
-  #accueil-note { margin-top: 16px; font-size: 12px; font-style: italic; opacity: .65; min-height: 15px; }
+  .accueil-regles { margin-top: 4px; }
+  #accueil-file {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    background: rgba(10, 50, 60, .92); border: 1px solid var(--bord); border-radius: 12px;
+    padding: 24px 32px; max-width: min(90vw, 420px); text-align: center;
+  }
+  #accueil-file p { margin: 0; font-size: 13.5px; }
+  #accueil-note {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+    width: min(92vw, 560px); margin: 0; font-size: 12px; font-style: italic;
+    opacity: .8; min-height: 15px; text-align: center; text-shadow: 0 1px 5px rgba(4, 24, 30, .9);
+  }
+  @media (max-width: 720px), (max-height: 560px) {
+    .accueil-scene { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 20px; }
+    .accueil-haut { position: static; }
+    .cta-ia { position: static; transform: none; width: 100%; max-width: 340px; }
+    .accueil-bas { position: static; transform: none; width: 100%; max-width: 340px; }
+    #accueil-file { position: static; transform: none; }
+    #accueil-note { position: static; transform: none; width: 100%; }
+  }
 
   @media (max-width: 720px) {
     #statut { flex-direction: column; }
@@ -216,12 +271,13 @@
 <header>
   <div class="titre-bloc">
     <h1>MARÉES</h1>
-    <p class="sous-titre">Un Go mouvant sur un archipel qui coule</p>
+    <p class="sous-titre" id="sous-titre-entete"></p>
   </div>
   <nav class="actions">
-    <button id="btn-nouvelle" type="button">Nouvelle partie</button>
-    <button id="btn-quitter" type="button" hidden>Quitter le salon</button>
-    <button id="btn-regles" type="button">Règles</button>
+    <button id="btn-nouvelle" type="button"></button>
+    <button id="btn-quitter" type="button" hidden></button>
+    <button id="btn-regles" type="button"></button>
+    <button id="btn-langue" type="button"></button>
   </nav>
 </header>
 
@@ -247,79 +303,60 @@
 </div>
 
 <main id="zone-plateau">
-  <canvas id="plateau" role="img" aria-label="Plateau de jeu MARÉES : archipel hexagonal qui coule"></canvas>
+  <canvas id="plateau" role="img"></canvas>
 </main>
 
 <footer id="legende">
-  <span>Poser : cliquez une case libre — Déplacer : cliquez une pierre puis une case surlignée (≤ 2 cases) — Échap : annuler</span>
+  <span id="pied-aide"></span>
   <span class="sep">·</span>
-  <span>Badge 3·2·1 : la case sombrera à la 3ᵉ, 2ᵉ ou prochaine marée</span>
+  <span id="pied-badge"></span>
 </footer>
 
 <div id="toasts" aria-live="polite"></div>
 
 <div class="voile visible" id="voile-accueil">
-  <div class="panneau accueil" role="dialog" aria-label="Écran d’accueil MARÉES">
-    <h2>MARÉES</h2>
-    <p class="sous-titre-accueil">Un Go mouvant sur un archipel qui coule</p>
-    <div class="menu-accueil" id="accueil-menu">
-      <button class="choix" id="btn-hotseat" type="button">Deux joueurs — même écran</button>
-      <button class="choix" id="btn-ia" type="button">Contre l’IA<span class="precis">vous jouez Azur, l’ordinateur joue Corail</span></button>
-      <button class="choix" id="btn-enligne" type="button">En ligne — salon LOB7<span class="precis">deux navigateurs sur lob7.com</span></button>
+  <div class="accueil-scene" id="accueil-dialogue" role="dialog">
+    <div class="accueil-haut">
+      <h2 class="accueil-titre">MARÉES</h2>
+      <p class="sous-titre-accueil" id="accueil-sous-titre"></p>
     </div>
-    <div class="menu-accueil" id="accueil-ia" hidden>
-      <button class="choix" id="btn-ia-facile" type="button">Facile<span class="precis">environ six coups sur dix aléatoires</span></button>
-      <button class="choix" id="btn-ia-normal" type="button">Normal<span class="precis">captures, sauvetages, territoire durable</span></button>
-      <button class="sous-choix" id="btn-ia-retour" type="button">← Retour</button>
+    <div id="accueil-menu">
+      <button class="cta-ia" id="btn-ia" type="button">
+        <span class="cta-titre" id="lbl-btn-ia"></span>
+        <span class="precis" id="lbl-btn-ia-hint"></span>
+      </button>
+      <div class="accueil-bas">
+        <p class="accueil-niveaux" id="accueil-niveaux"></p>
+        <div class="accueil-secondaires">
+          <button class="choix secondaire" id="btn-hotseat" type="button"><span id="lbl-btn-hotseat"></span></button>
+          <button class="choix secondaire" id="btn-ia-facile" type="button"><span id="lbl-btn-ia-facile"></span><span class="precis" id="lbl-btn-ia-facile-hint"></span></button>
+          <button class="choix secondaire" id="btn-enligne" type="button"><span id="lbl-btn-enligne"></span><span class="precis" id="lbl-btn-enligne-hint"></span></button>
+        </div>
+        <button class="sous-choix accueil-regles" id="btn-regles-accueil" type="button"></button>
+      </div>
     </div>
-    <div class="menu-accueil" id="accueil-file" hidden>
-      <p id="accueil-file-statut">Connexion au salon LOB7…</p>
-      <button class="sous-choix" id="btn-annuler-file" type="button">Annuler</button>
+    <div id="accueil-file" hidden>
+      <p id="accueil-file-statut"></p>
+      <button class="sous-choix" id="btn-annuler-file" type="button"></button>
     </div>
-    <button class="sous-choix accueil-regles" id="btn-regles-accueil" type="button">Règles</button>
     <p id="accueil-note"></p>
   </div>
 </div>
 
 <div class="voile" id="voile-regles">
-  <div class="panneau" role="dialog" aria-label="Règles du jeu">
-    <button class="fermer" id="fermer-regles" type="button" aria-label="Fermer">✕</button>
-    <h2>Règles du jeu</h2>
-    <h3>L’archipel</h3>
-    <p>Azur commence. Chaque joueur dispose de 8 pierres en réserve, aucune sur le plateau au départ. L’atoll compte 50 cases — et la mer le dévore. À la fin, celui qui possède le plus de pierres sur les terres encore émergées l’emporte.</p>
-    <h3>Votre tour — une seule action</h3>
-    <ul>
-      <li><strong>Placer</strong> : posez une pierre de votre réserve sur toute case émergée libre — même promise à la submersion.</li>
-      <li><strong>Déplacer</strong> : glissez une de vos pierres déjà en jeu vers une case émergée libre située à distance hexagonale ≤ 2 (sauter par-dessus une pierre est permis).</li>
-      <li>Réserve vide ? Seuls les déplacements restent possibles.</li>
-    </ul>
-    <h3>Captures (façon go)</h3>
-    <p>Après chaque action, toute pierre <em>ennemie</em> ayant au moins 4 de ses cases voisines existantes occupées par le joueur actif est capturée et retirée définitivement. Une case n’ayant que 3 voisines existantes ou moins (bord de mer, détroit) ne peut jamais être le théâtre d’une capture.</p>
-    <h3>La marée</h3>
-    <p>Un calendrier secret de 18 événements est scellé au début de la partie. Toutes les 6 demi-tours (une action d’un joueur = un demi-tour), la marée submerge 1 ou 2 cases : les pierres qui s’y trouvent se noient (retirées définitivement) et les cases deviennent de l’eau injouable.</p>
-    <h3>La prévision</h3>
-    <p>Les cases qui couleront lors des 3 prochaines marées sont marquées en permanence d’un badge : 3, 2 puis 1 marée restante. Au-delà, l’avenir reste sous l’eau.</p>
-    <h3>Fin de partie</h3>
-    <p>La partie s’arrête après la 18ᵉ marée, s’il ne reste que 14 cases émergées ou moins, ou si un joueur ne peut plus agir. On compte alors les pierres présentes sur le plateau : la majorité l’emporte — l’égalité est possible.</p>
-    <h3>Contrôles</h3>
-    <p>Cliquez une case libre pour poser une pierre ; cliquez une de vos pierres puis une case surlignée pour la déplacer ; Échap annule la sélection ou ferme les fenêtres.</p>
-    <h3>Contre l’IA</h3>
-    <p>Vous jouez Azur, l’ordinateur joue Corail — sans écran de passage : un message « L’IA réfléchit… » marque son tour (environ 800 ms). L’IA ne connaît que les informations publiques — le plateau et la prévision à 3 marées — jamais le calendrier secret. En <strong>Normal</strong>, elle évalue chaque action légale : capturer, sauver ses pierres dont la case coule d’ici 2 marées, menacer, s’installer sur des cases à longue durée de vie prévisible, connecter ses groupes, contrer près des zones sûres et éviter les badges 1-2 sauf capture immédiate. En <strong>Facile</strong>, elle joue environ 60 % de coups aléatoires légaux.</p>
-    <h3>En ligne — salon LOB7</h3>
-    <p>Deux navigateurs ouvrent le jeu depuis le même salon lob7.com. À la connexion, chaque participant annonce son identifiant : le plus petit devient <strong>Azur, l’hôte-arbitre</strong>, l’autre Corail. L’hôte détient l’état de la partie et le calendrier secret : il valide chaque coup de Corail (clé d’idempotence), l’applique, puis lui diffuse un plateau complet dont tout est public — hormis le calendrier, réduit aux submersions passées et à la prévision des 3 prochains événements. L’état visible est donc rigoureusement identique des deux côtés ; la victoire est prononcée par l’hôte. Toute déconnexion affiche « Connexion perdue » et ramène à l’accueil ; le bouton « Quitter le salon » permet de partir à tout moment.</p>
-    <p><em>Note d’honnêteté : l’hôte est un arbitre technique. Son navigateur connaît le calendrier secret et un hôte curieux pourrait l’inspecter — aucune triche n’est implémentée, mais la confiance repose sur lui.</em></p>
-    <p class="pourquoi">Pourquoi impossible avant l’informatique : un calendrier d’effondrement imprimé serait lisible par tous ; ici la prévision n’est révélée que 3 événements à l’avance.</p>
-    <div class="pied"><button id="fermer-regles-2" type="button">Fermer</button></div>
+  <div class="panneau" id="panneau-regles" role="dialog">
+    <button class="fermer" id="fermer-regles" type="button">✕</button>
+    <div id="regles-corps"></div>
   </div>
 </div>
 
 <div class="voile" id="voile-fin">
   <div class="panneau fin">
-    <p class="surtitre" style="letter-spacing:.3em; font-size:12px; opacity:.7; margin:0 0 4px;">FIN DE PARTIE</p>
+    <p class="surtitre" id="fin-surtitre" style="letter-spacing:.3em; font-size:12px; opacity:.7; margin:0 0 4px;"></p>
     <h2 class="titre-fin" id="fin-titre"></h2>
     <p id="fin-phrase"></p>
     <p id="fin-score"></p>
-    <button id="btn-rejouer" type="button">Rejouer</button>
+    <button id="btn-rejouer" type="button"></button>
   </div>
 </div>
 
@@ -774,32 +811,34 @@ function conclure(st, raison, detail) {
 // Moteur : applique UNE action, résout captures + marée éventuelle,
 // passe au demi-tour suivant et détecte la fin. Retourne un journal
 // (effets pour l'UI/animations) ou { erreur } si l'action est illégale.
+// Les erreurs sont des CODES neutres (stables, sans langue) traduits
+// par l'UI via STR['err.' + code].
 function jouerAction(st, action) {
-  if (st.fini) return { erreur: 'La partie est terminée.' };
+  if (st.fini) return { erreur: 'fin' };
   const joueur = st.joueur;
   const journal = { joueur: joueur, placement: null, deplacement: null, captures: [], maree: null, fin: null };
 
   if (action.type === 'placer') {
     const c = caseEmergee(st, action.cle);
-    if (!c) return { erreur: 'Case injouable (eau ou déjà submergée).' };
-    if (c.pierre) return { erreur: 'Case occupée.' };
-    if (st.reserve[joueur] <= 0) return { erreur: 'Réserve vide — déplacez une de vos pierres.' };
+    if (!c) return { erreur: 'case_injouable' };
+    if (c.pierre) return { erreur: 'case_occupee' };
+    if (st.reserve[joueur] <= 0) return { erreur: 'reserve_vide' };
     c.pierre = joueur;
     st.reserve[joueur]--;
     journal.placement = action.cle;
   } else if (action.type === 'deplacer') {
     const de = caseEmergee(st, action.de);
     const vers = caseEmergee(st, action.vers);
-    if (!de || de.pierre !== joueur) return { erreur: 'Cette pierre n’est pas à vous.' };
-    if (!vers) return { erreur: 'Destination injouable (eau ou submergée).' };
-    if (vers.pierre) return { erreur: 'Destination occupée.' };
+    if (!de || de.pierre !== joueur) return { erreur: 'pas_votre_pierre' };
+    if (!vers) return { erreur: 'destination_injouable' };
+    if (vers.pierre) return { erreur: 'destination_occupee' };
     const d = hexDist(de.q, de.r, vers.q, vers.r);
-    if (d < 1 || d > 2) return { erreur: 'Destination trop éloignée (distance hexagonale max 2).' };
+    if (d < 1 || d > 2) return { erreur: 'trop_loin' };
     de.pierre = null;
     vers.pierre = joueur;
     journal.deplacement = { de: action.de, vers: action.vers };
   } else {
-    return { erreur: 'Action inconnue.' };
+    return { erreur: 'action_inconnue' };
   }
 
   journal.captures = capturesApresAction(st, joueur);
@@ -825,6 +864,329 @@ function jouerAction(st, action) {
   return journal;
 }
 // #LOGIQUE-FIN
+
+/* =====================================================================
+   5bis. I18N — STR : table EN (défaut) / FR. Tout texte UI passe par
+        T(cle, params) ; aucune chaîne affichée n'est codée en dur
+        ailleurs. « MARÉES », Azur et Corail restent inchangés.
+        Bascule via le bouton FR/EN du header ; mémorisation
+        sessionStorage (échec silencieux, sûr en file://).
+   ===================================================================== */
+
+const STR = {
+  en: {
+    "doc.titre": "MARÉES — A shifting Go on a sinking archipelago",
+    "sous.titre": "A shifting Go on a sinking archipelago",
+    "btn.nouvelle": "New game",
+    "btn.quitter": "Leave the room",
+    "btn.regles": "Rules",
+    "btn.langue": "FR",
+    "btn.langueAria": "Switch to French",
+    "plateau.aria": "MARÉES board: a sinking hexagonal archipelago",
+    "accueil.aria": "MARÉES home screen",
+    "accueil.ia": "Play against the AI",
+    "accueil.iaHint": "you play Azur, the computer plays Corail",
+    "accueil.niveaux": "Normal: captures, rescues, lasting territory · Easy: about six moves in ten are random",
+    "accueil.hotseat": "Two players — same screen",
+    "accueil.facile": "Easy AI",
+    "accueil.facileHint": "about six moves in ten are random",
+    "accueil.enligne": "Online — LOB7 room",
+    "accueil.enligneHint": "two browsers on lob7.com",
+    "accueil.regles": "Rules",
+    "accueil.annuler": "Cancel",
+    "file.connexion": "Connecting to the LOB7 room…",
+    "file.attente": "Room joined — waiting for the other player…",
+    "file.corail": "You are Corail — the host (Azur) is preparing the game…",
+    "fermer": "Close",
+    "pied.aide": "Place: click a free cell — Move: click a stone then a highlighted cell (≤ 2 cells) — Esc: cancel",
+    "pied.badge": "Badge 3·2·1: the cell will sink on the 3rd, 2nd or next tide",
+    "niveau.facile": "Easy",
+    "niveau.normal": "Normal",
+    "hud.reserve": p => "reserve " + p.act + "/" + p.max + " · " + p.n + " on the archipel",
+    "hud.tour": p => p.nom + "'s turn — half-turn " + p.n,
+    "hud.ia": p => "The AI is thinking… — half-turn " + p.n,
+    "hud.fin": p => "Game over — half-turn " + p.n,
+    "hud.fileAttente": p => "Move sent — the host is refereeing… — half-turn " + p.n,
+    "hud.aVous": p => "Your move (" + p.nom + ") — half-turn " + p.n,
+    "hud.adversaire": p => "Opponent's turn (" + p.nom + ") — half-turn " + p.n,
+    "hud.mareeImminente": "Tide at the end of this half-turn!",
+    "hud.mareeDans": p => "Next tide in " + p.n + " half-turns",
+    "hud.calendrierFini": "Tide calendar exhausted",
+    "hud.compte": p => "Tides so far: " + p.f + "/" + p.t + " · " + p.c + " cells above water",
+    "etq.iaVous": "AZUR — you",
+    "etq.iaIA": "CORAIL — AI",
+    "etq.hoteVous": "AZUR — you, host",
+    "etq.hoteDistantCorail": "CORAIL — remote",
+    "etq.hoteDistantAzur": "AZUR — remote, host",
+    "etq.vousCorail": "CORAIL — you",
+    "toast.nouvelle": p => "New game — Azur starts. First tide in " + p.n + " half-turns.",
+    "toast.iaDepart": p => "You play Azur — the AI (" + p.niveau + ") plays Corail. Your move.",
+    "toast.reserveVide": p => p.nom + "'s reserve is empty: moves only from now on.",
+    "toast.capture": p => p.nom + " captures " + (p.n === 1 ? "one " : p.n + " ") + p.adv + (p.n === 1 ? " stone." : " stones."),
+    "toast.maree": p => {
+      let s = "Tide No. " + p.numero + ": " + (p.cases > 1 ? p.cases + " cells swallowed" : "one cell swallowed");
+      if (p.noyees === 1) s += ", one stone drowns";
+      else if (p.noyees > 1) s += ", " + p.noyees + " stones drown";
+      return s + ".";
+    },
+    "toast.nullePart": "This stone cannot go anywhere (no free cell within hex distance ≤ 2).",
+    "toast.aAutrui": p => "This stone belongs to " + p.nom + ".",
+    "toast.mauvaiseDest": "Forbidden destination: maximum hex distance of 2.",
+    "toast.reserveVideClic": "Reserve empty — click one of your stones to move it.",
+    "err.fin": "The game is over.",
+    "err.case_injouable": "Unplayable cell (water or already submerged).",
+    "err.case_occupee": "Cell occupied.",
+    "err.reserve_vide": "Reserve empty — move one of your stones.",
+    "err.pas_votre_pierre": "This stone is not yours.",
+    "err.destination_injouable": "Unplayable destination (water or submerged).",
+    "err.destination_occupee": "Destination occupied.",
+    "err.trop_loin": "Destination too far (maximum hex distance 2).",
+    "err.action_inconnue": "Unknown action.",
+    "net.envoiImpossible": p => "Send failed (" + p.code + ").",
+    "net.perdue": "Connection lost.",
+    "net.perdueAccueil": "Connection lost — back to the home screen.",
+    "net.sorti": "You have left the room.",
+    "net.adversaireParti": "The opponent has left the room.",
+    "net.necessite": "Online mode requires lob7.com.",
+    "net.note": "Online mode requires lob7.com — open the game from its lob7.com room.",
+    "net.sdk": "LOB7 SDK not found.",
+    "net.vousHote": "You are Azur — host and technical referee. Your move.",
+    "net.coupRefuse": p => "Remote move refused: " + p.msg,
+    "fin.surtitre": "GAME OVER",
+    "fin.egalite": "DRAW",
+    "fin.victoire": p => p.nom.toUpperCase() + " WINS",
+    "fin.raison.calendrier": p => "The " + p.n + "th and final tide has struck: the calendar is exhausted.",
+    "fin.raison.archipel": p => "Only " + p.n + " cells remain above water: the archipelago has shrunk too far.",
+    "fin.raison.blocage": p => p.nom + " can no longer act.",
+    "fin.decompte": p => "Stones on the archipelago — Azur " + p.a + " · Corail " + p.c + ".",
+    "fin.score": p => p.a + (p.a === 1 ? " azur stone against " : " azur stones against ") + p.c + (p.c === 1 ? " corail stone" : " corail stones"),
+    "fin.rejouer": "Play again",
+    "regles.aria": "Rules of the game",
+    "regles.corps": `
+<h2>Rules of the game</h2>
+<h3>The archipelago</h3>
+<p>Azur starts. Each player has 8 stones in reserve, none on the board at the start. The atoll counts 50 cells — and the sea is devouring it. In the end, whoever holds the most stones on the land still above water wins.</p>
+<h3>Your turn — one single action</h3>
+<ul>
+<li><strong>Place</strong>: put a stone from your reserve on any free cell above water — even one doomed to sink.</li>
+<li><strong>Move</strong>: slide one of your stones already in play to a free cell above water at hex distance ≤ 2 (jumping over a stone is allowed).</li>
+<li>Empty reserve? Only moves remain available.</li>
+</ul>
+<h3>Captures (go-style)</h3>
+<p>After each action, any <em>enemy</em> stone with at least 4 of its existing neighbouring cells occupied by the active player is captured and removed for good. A cell with 3 or fewer existing neighbours (sea edge, strait) can never be the scene of a capture.</p>
+<h3>The tide</h3>
+<p>A secret schedule of 18 events is sealed at the start of the game. Every 6 half-turns (one player's action = one half-turn), the tide swallows 1 or 2 cells: the stones sitting there drown (removed for good) and the cells become unplayable water.</p>
+<h3>The forecast</h3>
+<p>The cells that will sink over the next 3 tides are permanently marked with a badge: 3, 2 then 1 tide remaining. Beyond that, the future stays underwater.</p>
+<h3>End of the game</h3>
+<p>The game stops after the 18th tide, once 14 cells or fewer remain above water, or if a player can no longer act. The stones left on the board are then counted: the majority wins — a draw is possible.</p>
+<h3>Controls</h3>
+<p>Click a free cell to place a stone; click one of your stones then a highlighted cell to move it; Esc cancels the selection or closes the windows.</p>
+<h3>Against the AI</h3>
+<p>You play Azur, the computer plays Corail — with no pass-device screen: a “The AI is thinking…” banner marks its turn (about 0.6 s). The AI only knows public information — the board and the 3-tide forecast — never the secret schedule. In <strong>Normal</strong>, it evaluates every legal action: capturing, rescuing its stones whose cell sinks within 2 tides, threatening, settling on cells with a predictably long life, connecting its groups, countering near safe zones and avoiding 1-2 badges except for an immediate capture. In <strong>Easy</strong>, it plays about 60% random legal moves.</p>
+<h3>Online — LOB7 room</h3>
+<p>Two browsers open the game from the same lob7.com room. On connecting, each participant announces their identifier: the smaller one becomes <strong>Azur, the host-referee</strong>, the other Corail. The host holds the game state and the secret schedule: they validate each of Corail's moves (idempotency key), apply it, then broadcast a complete board of which everything is public — except the schedule, reduced to past submersions and the forecast of the 3 next events. The visible state is therefore strictly identical on both sides; victory is declared by the host. Any disconnection shows “Connection lost” and returns to the home screen; the “Leave the room” button lets you walk away at any time.</p>
+<p><em>Honesty note: the host is a technical referee. Their browser knows the secret schedule and a curious host could inspect it — no cheating is implemented, but trust rests on them.</em></p>
+<p class="pourquoi">Why impossible before computers: a printed collapse schedule would be readable by everyone; here the forecast only ever shows three events ahead.</p>
+<div class="pied"><button id="fermer-regles-2" type="button">Close</button></div>`
+  },
+  fr: {
+    "doc.titre": "MARÉES — Un Go mouvant sur un archipel qui coule",
+    "sous.titre": "Un Go mouvant sur un archipel qui coule",
+    "btn.nouvelle": "Nouvelle partie",
+    "btn.quitter": "Quitter le salon",
+    "btn.regles": "Règles",
+    "btn.langue": "EN",
+    "btn.langueAria": "Passer en anglais",
+    "plateau.aria": "Plateau de jeu MARÉES : archipel hexagonal qui coule",
+    "accueil.aria": "Écran d’accueil MARÉES",
+    "accueil.ia": "Contre l’IA",
+    "accueil.iaHint": "vous jouez Azur, l’ordinateur joue Corail",
+    "accueil.niveaux": "Normal : captures, sauvetages, territoire durable · Facile : environ six coups sur dix aléatoires",
+    "accueil.hotseat": "Deux joueurs — même écran",
+    "accueil.facile": "IA Facile",
+    "accueil.facileHint": "environ six coups sur dix aléatoires",
+    "accueil.enligne": "En ligne — salon LOB7",
+    "accueil.enligneHint": "deux navigateurs sur lob7.com",
+    "accueil.regles": "Règles",
+    "accueil.annuler": "Annuler",
+    "file.connexion": "Connexion au salon LOB7…",
+    "file.attente": "Salon rejoint — en attente de l’autre joueur…",
+    "file.corail": "Vous êtes Corail — l’hôte (Azur) prépare la partie…",
+    "fermer": "Fermer",
+    "pied.aide": "Poser : cliquez une case libre — Déplacer : cliquez une pierre puis une case surlignée (≤ 2 cases) — Échap : annuler",
+    "pied.badge": "Badge 3·2·1 : la case sombrera à la 3ᵉ, 2ᵉ ou prochaine marée",
+    "niveau.facile": "Facile",
+    "niveau.normal": "Normal",
+    "hud.reserve": p => "réserve " + p.act + " / " + p.max + " · " + p.n + " sur l’archipel",
+    "hud.tour": p => "Au tour de " + p.nom + " — demi-tour " + p.n,
+    "hud.ia": p => "L’IA réfléchit… — demi-tour " + p.n,
+    "hud.fin": p => "Partie terminée — demi-tour " + p.n,
+    "hud.fileAttente": p => "Coup transmis — l’hôte arbitre la partie… — demi-tour " + p.n,
+    "hud.aVous": p => "À vous de jouer (" + p.nom + ") — demi-tour " + p.n,
+    "hud.adversaire": p => "Au tour de l’adversaire (" + p.nom + ") — demi-tour " + p.n,
+    "hud.mareeImminente": "Marée à la fin de ce demi-tour !",
+    "hud.mareeDans": p => "Prochaine marée dans " + p.n + " demi-tours",
+    "hud.calendrierFini": "Calendrier des marées épuisé",
+    "hud.compte": p => "Marées survenues : " + p.f + " / " + p.t + " · " + p.c + " cases émergées",
+    "etq.iaVous": "AZUR — vous",
+    "etq.iaIA": "CORAIL — IA",
+    "etq.hoteVous": "AZUR — vous, hôte",
+    "etq.hoteDistantCorail": "CORAIL — distant",
+    "etq.hoteDistantAzur": "AZUR — distant, hôte",
+    "etq.vousCorail": "CORAIL — vous",
+    "toast.nouvelle": p => "Nouvelle partie — Azur commence. Première marée dans " + p.n + " demi-tours.",
+    "toast.iaDepart": p => "Vous jouez Azur — l’IA (" + p.niveau + ") joue Corail. À vous de commencer.",
+    "toast.reserveVide": p => "Réserve de " + p.nom + " vide : désormais, déplacements uniquement.",
+    "toast.capture": p => p.nom + " capture " + (p.n === 1 ? "une pierre " : p.n + " pierres ") + p.adv.toLowerCase() + ".",
+    "toast.maree": p => {
+      let s = "Marée n° " + p.numero + " : " + (p.cases > 1 ? p.cases + " cases englouties" : "une case engloutie");
+      if (p.noyees === 1) s += ", une pierre se noie";
+      else if (p.noyees > 1) s += ", " + p.noyees + " pierres se noient";
+      return s + ".";
+    },
+    "toast.nullePart": "Cette pierre ne peut aller nulle part (aucune case libre à distance ≤ 2).",
+    "toast.aAutrui": p => "Cette pierre appartient à " + p.nom + ".",
+    "toast.mauvaiseDest": "Destination interdite : distance hexagonale maximale de 2.",
+    "toast.reserveVideClic": "Réserve vide — cliquez une de vos pierres pour la déplacer.",
+    "err.fin": "La partie est terminée.",
+    "err.case_injouable": "Case injouable (eau ou déjà submergée).",
+    "err.case_occupee": "Case occupée.",
+    "err.reserve_vide": "Réserve vide — déplacez une de vos pierres.",
+    "err.pas_votre_pierre": "Cette pierre n’est pas à vous.",
+    "err.destination_injouable": "Destination injouable (eau ou submergée).",
+    "err.destination_occupee": "Destination occupée.",
+    "err.trop_loin": "Destination trop éloignée (distance hexagonale max 2).",
+    "err.action_inconnue": "Action inconnue.",
+    "net.envoiImpossible": p => "Envoi impossible (" + p.code + ").",
+    "net.perdue": "Connexion perdue.",
+    "net.perdueAccueil": "Connexion perdue — retour à l’accueil.",
+    "net.sorti": "Vous avez quitté le salon.",
+    "net.adversaireParti": "L’adversaire a quitté le salon.",
+    "net.necessite": "Le mode en ligne nécessite lob7.com.",
+    "net.note": "Le mode en ligne nécessite lob7.com — ouvrez le jeu depuis son salon lob7.com.",
+    "net.sdk": "SDK LOB7 introuvable.",
+    "net.vousHote": "Vous êtes Azur — hôte et arbitre technique. À vous de commencer.",
+    "net.coupRefuse": p => "Coup distant refusé : " + p.msg,
+    "fin.surtitre": "FIN DE PARTIE",
+    "fin.egalite": "ÉGALITÉ",
+    "fin.victoire": p => "VICTOIRE " + p.nom.toUpperCase(),
+    "fin.raison.calendrier": p => "La " + p.n + "ᵉ et dernière marée a frappé : le calendrier est épuisé.",
+    "fin.raison.archipel": p => "Il ne reste que " + p.n + " cases émergées : l’archipel a trop rétréci.",
+    "fin.raison.blocage": p => p.nom + " ne peut plus agir.",
+    "fin.decompte": p => "Pierres sur l’archipel — Azur " + p.a + " · Corail " + p.c + ".",
+    "fin.score": p => p.a + " pierre" + (p.a > 1 ? "s" : "") + " azur contre " + p.c + " pierre" + (p.c > 1 ? "s" : "") + " corail",
+    "fin.rejouer": "Rejouer",
+    "regles.aria": "Règles du jeu",
+    "regles.corps": `
+<h2>Règles du jeu</h2>
+<h3>L’archipel</h3>
+<p>Azur commence. Chaque joueur dispose de 8 pierres en réserve, aucune sur le plateau au départ. L’atoll compte 50 cases — et la mer le dévore. À la fin, celui qui possède le plus de pierres sur les terres encore émergées l’emporte.</p>
+<h3>Votre tour — une seule action</h3>
+<ul>
+<li><strong>Placer</strong> : posez une pierre de votre réserve sur toute case émergée libre — même promise à la submersion.</li>
+<li><strong>Déplacer</strong> : glissez une de vos pierres déjà en jeu vers une case émergée libre située à distance hexagonale ≤ 2 (sauter par-dessus une pierre est permis).</li>
+<li>Réserve vide ? Seuls les déplacements restent possibles.</li>
+</ul>
+<h3>Captures (façon go)</h3>
+<p>Après chaque action, toute pierre <em>ennemie</em> ayant au moins 4 de ses cases voisines existantes occupées par le joueur actif est capturée et retirée définitivement. Une case n’ayant que 3 voisines existantes ou moins (bord de mer, détroit) ne peut jamais être le théâtre d’une capture.</p>
+<h3>La marée</h3>
+<p>Un calendrier secret de 18 événements est scellé au début de la partie. Toutes les 6 demi-tours (une action d’un joueur = un demi-tour), la marée submerge 1 ou 2 cases : les pierres qui s’y trouvent se noient (retirées définitivement) et les cases deviennent de l’eau injouable.</p>
+<h3>La prévision</h3>
+<p>Les cases qui couleront lors des 3 prochaines marées sont marquées en permanence d’un badge : 3, 2 puis 1 marée restante. Au-delà, l’avenir reste sous l’eau.</p>
+<h3>Fin de partie</h3>
+<p>La partie s’arrête après la 18ᵉ marée, s’il ne reste que 14 cases émergées ou moins, ou si un joueur ne peut plus agir. On compte alors les pierres présentes sur le plateau : la majorité l’emporte — l’égalité est possible.</p>
+<h3>Contrôles</h3>
+<p>Cliquez une case libre pour poser une pierre ; cliquez une de vos pierres puis une case surlignée pour la déplacer ; Échap annule la sélection ou ferme les fenêtres.</p>
+<h3>Contre l’IA</h3>
+<p>Vous jouez Azur, l’ordinateur joue Corail — sans écran de passage : un message « L’IA réfléchit… » marque son tour (environ 600 ms). L’IA ne connaît que les informations publiques — le plateau et la prévision à 3 marées — jamais le calendrier secret. En <strong>Normal</strong>, elle évalue chaque action légale : capturer, sauver ses pierres dont la case coule d’ici 2 marées, menacer, s’installer sur des cases à longue durée de vie prévisible, connecter ses groupes, contrer près des zones sûres et éviter les badges 1-2 sauf capture immédiate. En <strong>Facile</strong>, elle joue environ 60 % de coups aléatoires légaux.</p>
+<h3>En ligne — salon LOB7</h3>
+<p>Deux navigateurs ouvrent le jeu depuis le même salon lob7.com. À la connexion, chaque participant annonce son identifiant : le plus petit devient <strong>Azur, l’hôte-arbitre</strong>, l’autre Corail. L’hôte détient l’état de la partie et le calendrier secret : il valide chaque coup de Corail (clé d’idempotence), l’applique, puis lui diffuse un plateau complet dont tout est public — hormis le calendrier, réduit aux submersions passées et à la prévision des 3 prochains événements. L’état visible est donc rigoureusement identique des deux côtés ; la victoire est prononcée par l’hôte. Toute déconnexion affiche « Connexion perdue » et ramène à l’accueil ; le bouton « Quitter le salon » permet de partir à tout moment.</p>
+<p><em>Note d’honnêteté : l’hôte est un arbitre technique. Son navigateur connaît le calendrier secret et un hôte curieux pourrait l’inspecter — aucune triche n’est implémentée, mais la confiance repose sur lui.</em></p>
+<p class="pourquoi">Pourquoi impossible avant l’informatique : un calendrier d’effondrement imprimé serait lisible par tous ; ici la prévision n’est révélée que 3 événements à l’avance.</p>
+<div class="pied"><button id="fermer-regles-2" type="button">Fermer</button></div>`
+  }
+};
+
+let langue = 'en';   // anglais par défaut
+try {
+  const pref = sessionStorage.getItem('marees.langue');
+  if (pref === 'fr' || pref === 'en') langue = pref;   // préférence mémorisée
+} catch (e) { langue = 'en'; /* échec silencieux (file:// etc.) */ }
+
+// T(cle, params) : valeur FR si présente, repli EN, sinon la clé.
+function T(cle, params) {
+  const dico = STR[langue] || STR.en;
+  let v = Object.prototype.hasOwnProperty.call(dico, cle) ? dico[cle] : STR.en[cle];
+  if (typeof v === 'function') v = v(params || {});
+  return v === undefined ? cle : String(v);
+}
+
+function definirLangue(l) {
+  langue = (l === 'fr') ? 'fr' : 'en';
+  try { sessionStorage.setItem('marees.langue', langue); } catch (e) { /* échec silencieux */ }
+  majTextesStatiques();
+  majModeHeader();
+}
+
+// Statut de file d'attente (accueil) : clé i18n mémorisée → re-rendu si
+// la langue change pendant l'attente.
+let fileStatutCle = null;
+function majFileStatut() {
+  const el = document.getElementById('accueil-file-statut');
+  if (el) el.textContent = fileStatutCle ? T(fileStatutCle) : '';
+}
+function direFileStatut(cle) { fileStatutCle = cle; majFileStatut(); }
+
+// Note du bas d'accueil (clé + détail brut, ex. message d'erreur SDK).
+const noteAccueil = { cle: null, detail: '' };
+function majNoteAccueil() {
+  const el = document.getElementById('accueil-note');
+  if (el) el.textContent = noteAccueil.cle ? T(noteAccueil.cle) + (noteAccueil.detail ? ' (' + noteAccueil.detail + ')' : '') : '';
+}
+function noterAccueil(cle, detail) {
+  noteAccueil.cle = cle || null;
+  noteAccueil.detail = detail || '';
+  majNoteAccueil();
+}
+
+function majRegles() {
+  document.getElementById('regles-corps').innerHTML = T('regles.corps');
+  document.getElementById('panneau-regles').setAttribute('aria-label', T('regles.aria'));
+  document.getElementById('fermer-regles').setAttribute('aria-label', T('fermer'));
+}
+
+// Remplit tous les textes statiques (HTML volontairement neutre au départ).
+function majTextesStatiques() {
+  document.documentElement.lang = langue;
+  document.title = T('doc.titre');
+  document.getElementById('sous-titre-entete').textContent = T('sous.titre');
+  document.getElementById('btn-nouvelle').textContent = T('btn.nouvelle');
+  document.getElementById('btn-quitter').textContent = T('btn.quitter');
+  document.getElementById('btn-regles').textContent = T('btn.regles');
+  const btnLangue = document.getElementById('btn-langue');
+  btnLangue.textContent = T('btn.langue');
+  btnLangue.setAttribute('aria-label', T('btn.langueAria'));
+  canvas.setAttribute('aria-label', T('plateau.aria'));
+  document.getElementById('pied-aide').textContent = T('pied.aide');
+  document.getElementById('pied-badge').textContent = T('pied.badge');
+  document.getElementById('accueil-dialogue').setAttribute('aria-label', T('accueil.aria'));
+  document.getElementById('accueil-sous-titre').textContent = T('sous.titre');
+  document.getElementById('lbl-btn-ia').textContent = T('accueil.ia');
+  document.getElementById('lbl-btn-ia-hint').textContent = T('accueil.iaHint');
+  document.getElementById('accueil-niveaux').textContent = T('accueil.niveaux');
+  document.getElementById('lbl-btn-hotseat').textContent = T('accueil.hotseat');
+  document.getElementById('lbl-btn-ia-facile').textContent = T('accueil.facile');
+  document.getElementById('lbl-btn-ia-facile-hint').textContent = T('accueil.facileHint');
+  document.getElementById('lbl-btn-enligne').textContent = T('accueil.enligne');
+  document.getElementById('lbl-btn-enligne-hint').textContent = T('accueil.enligneHint');
+  document.getElementById('btn-regles-accueil').textContent = T('accueil.regles');
+  document.getElementById('btn-annuler-file').textContent = T('accueil.annuler');
+  document.getElementById('fin-surtitre').textContent = T('fin.surtitre');
+  majRegles();
+  majFileStatut();
+  majNoteAccueil();
+}
 
 /* =====================================================================
    6. COUCHE D'ASSETS — assets/manifest.js chargé dynamiquement (file://)
@@ -1427,46 +1789,45 @@ function majHUD() {
       cont.appendChild(sp);
     }
     document.getElementById('info-' + j).textContent =
-      'réserve ' + st.reserve[j] + ' / ' + RESERVE_INITIALE + ' · ' + t[j] + ' sur l’archipel';
+      T('hud.reserve', { act: st.reserve[j], max: RESERVE_INITIALE, n: t[j] });
     document.getElementById('panneau-' + j).classList.toggle('actif', !st.fini && st.joueur === j);
   }
   let bandeau;
   if (st.fini) {
-    bandeau = 'Partie terminée — demi-tour ' + st.demiTour;
+    bandeau = T('hud.fin', { n: st.demiTour });
   } else if (mode === 'ia' && st.joueur === 'corail') {
-    bandeau = 'L’IA réfléchit… — demi-tour ' + st.demiTour;
+    bandeau = T('hud.ia', { n: st.demiTour });
   } else if (mode === 'enligne' && net.demarree) {
-    if (net.enAttente) bandeau = 'Coup transmis — l’hôte arbitre la partie… — demi-tour ' + st.demiTour;
-    else if (st.joueur === net.role) bandeau = 'À vous de jouer (' + nomJoueur(net.role) + ') — demi-tour ' + st.demiTour;
-    else bandeau = 'Au tour de l’adversaire (' + nomJoueur(st.joueur) + ') — demi-tour ' + st.demiTour;
+    if (net.enAttente) bandeau = T('hud.fileAttente', { n: st.demiTour });
+    else if (st.joueur === net.role) bandeau = T('hud.aVous', { nom: nomJoueur(net.role), n: st.demiTour });
+    else bandeau = T('hud.adversaire', { nom: nomJoueur(st.joueur), n: st.demiTour });
   } else {
-    bandeau = 'Au tour de ' + nomJoueur(st.joueur) + ' — demi-tour ' + st.demiTour;
+    bandeau = T('hud.tour', { nom: nomJoueur(st.joueur), n: st.demiTour });
   }
   document.getElementById('demi-tour').textContent = bandeau;
   const mEl = document.getElementById('texte-maree');
   if (st.evenementsFaits >= NB_EVENEMENTS) {
-    mEl.textContent = 'Calendrier des marées épuisé';
+    mEl.textContent = T('hud.calendrierFini');
     mEl.classList.remove('imminent');
   } else {
     const restants = PERIODE_MAREE - ((st.demiTour - 1) % PERIODE_MAREE);
     mEl.textContent = restants === 1
-      ? 'Marée à la fin de ce demi-tour !'
-      : 'Prochaine marée dans ' + restants + ' demi-tours';
+      ? T('hud.mareeImminente')
+      : T('hud.mareeDans', { n: restants });
     mEl.classList.toggle('imminent', restants === 1);
   }
   document.getElementById('compte-marees').textContent =
-    'Marées survenues : ' + st.evenementsFaits + ' / ' + NB_EVENEMENTS +
-    ' · ' + nbEmergees(st) + ' cases émergées';
+    T('hud.compte', { f: st.evenementsFaits, t: NB_EVENEMENTS, c: nbEmergees(st) });
   dessinerIconeVague();
 }
 
 function phraseFin(st) {
   let r;
-  if (st.raisonFin === 'calendrier') r = 'La 18ᵉ et dernière marée a frappé : le calendrier est épuisé.';
-  else if (st.raisonFin === 'archipel') r = 'Il ne reste que ' + nbEmergees(st) + ' cases émergées : l’archipel a trop rétréci.';
-  else r = nomJoueur(st.detailFin && st.detailFin.joueur || st.joueur) + ' ne peut plus agir.';
+  if (st.raisonFin === 'calendrier') r = T('fin.raison.calendrier', { n: NB_EVENEMENTS });
+  else if (st.raisonFin === 'archipel') r = T('fin.raison.archipel', { n: nbEmergees(st) });
+  else r = T('fin.raison.blocage', { nom: nomJoueur(st.detailFin && st.detailFin.joueur || st.joueur) });
   const t = compterPierres(st);
-  return r + ' Pierres sur l’archipel — Azur ' + t.azur + ' · Corail ' + t.corail + '.';
+  return r + ' ' + T('fin.decompte', { a: t.azur, c: t.corail });
 }
 
 function montrerFin() {
@@ -1474,11 +1835,12 @@ function montrerFin() {
   if (!st || !st.fini) return;
   const t = compterPierres(st);
   const titre = document.getElementById('fin-titre');
-  titre.textContent = st.vainqueur === 'egalite' ? 'ÉGALITÉ' : 'VICTOIRE ' + st.vainqueur.toUpperCase();
+  titre.textContent = st.vainqueur === 'egalite'
+    ? T('fin.egalite')
+    : T('fin.victoire', { nom: st.vainqueur });
   titre.className = 'titre-fin ' + (st.vainqueur === 'egalite' ? 'or' : st.vainqueur);
   document.getElementById('fin-phrase').textContent = phraseFin(st);
-  document.getElementById('fin-score').textContent =
-    t.azur + ' pierre' + (t.azur > 1 ? 's' : '') + ' azur contre ' + t.corail + ' pierre' + (t.corail > 1 ? 's' : '') + ' corail';
+  document.getElementById('fin-score').textContent = T('fin.score', { a: t.azur, c: t.corail });
   document.getElementById('voile-fin').classList.add('visible');
 }
 
@@ -1497,7 +1859,7 @@ function animerEtApres(journal) {
     cachees[journal.placement] = true;
     ajouterAnim({ type: 'place', cle: journal.placement, cleFin: journal.placement, couleur: journal.joueur, dur: 240 });
     if (st.reserve[journal.joueur] === 0) {
-      setTimeout(() => toast('Réserve de ' + nomJoueur(journal.joueur) + ' vide : désormais, déplacements uniquement.', 'info'), 350);
+      setTimeout(() => toast(T('toast.reserveVide', { nom: nomJoueur(journal.joueur) }), 'info'), 350);
     }
   }
   if (journal.deplacement) {
@@ -1510,7 +1872,7 @@ function animerEtApres(journal) {
   if (journal.captures.length) {
     const adv = adversaire(journal.joueur);
     const n = journal.captures.length;
-    toast(nomJoueur(journal.joueur) + ' capture ' + (n === 1 ? 'une pierre' : n + ' pierres') + ' ' + (n === 1 ? '' : '') + nomJoueur(adv).toLowerCase() + (n > 1 ? 's' : '') + '.', 'capture');
+    toast(T('toast.capture', { nom: nomJoueur(journal.joueur), adv: nomJoueur(adv), n: n }), 'capture');
     for (const cap of journal.captures) {
       ajouterAnim({ type: 'capture', cle: cap.cle, couleur: cap.couleur, dur: 480, delay: 60 });
     }
@@ -1527,10 +1889,8 @@ function animerEtApres(journal) {
         ajouterAnim({ type: 'noyade', cle: dc.cle, couleur: couleur, dur: 760, delay: 180 });
       }
     }
-    let txt = 'Marée n° ' + m.numero + ' : ' + (m.cases.length > 1 ? '2 cases englouties' : 'une case engloutie');
-    if (noyees === 1) txt += ', une pierre se noie';
-    else if (noyees > 1) txt += ', ' + noyees + ' pierres se noient';
-    toast(txt + '.', 'maree');
+    let txt = T('toast.maree', { numero: m.numero, cases: m.cases.length, noyees: noyees });
+    toast(txt, 'maree');
     const monId = idPartie;
     setTimeout(() => { if (monId === idPartie) ui.bloque = false; }, 1020);
   }
@@ -1547,7 +1907,7 @@ function appliquer(action) {
   if (mode === 'enligne' && net.role === 'corail') { envoyerCoupCorail(action); return; }
   const journal = jouerAction(ui.state, action);
   if (journal.erreur) {
-    toast(journal.erreur, 'avertissement');
+    toast(T('err.' + journal.erreur), 'avertissement');
     return;
   }
   animerEtApres(journal);
@@ -1566,7 +1926,7 @@ function nouvellePartie(silencieux) {
   rendu.terreSale = true;
   document.getElementById('voile-fin').classList.remove('visible');
   majHUD();
-  if (!silencieux) toast('Nouvelle partie — Azur commence. Première marée dans 6 demi-tours.', 'info');
+  if (!silencieux) toast(T('toast.nouvelle', { n: PERIODE_MAREE }), 'info');
 }
 
 /* =====================================================================
@@ -1592,12 +1952,12 @@ canvas.addEventListener('click', (ev) => {
     else {
       ui.selection = cle;
       ui.dests = deplacementsLegauxDepuis(st, cle);
-      if (ui.dests.length === 0) toast('Cette pierre ne peut aller nulle part (aucune case libre à distance ≤ 2).', 'avertissement');
+      if (ui.dests.length === 0) toast(T('toast.nullePart'), 'avertissement');
     }
     return;
   }
   if (c.pierre) {
-    toast('Cette pierre appartient à ' + nomJoueur(c.pierre) + '.', 'info');
+    toast(T('toast.aAutrui', { nom: nomJoueur(c.pierre) }), 'info');
     return;
   }
   // case libre : destination de déplacement, ou placement
@@ -1605,14 +1965,14 @@ canvas.addEventListener('click', (ev) => {
     if (ui.dests.indexOf(cle) !== -1) {
       appliquer({ type: 'deplacer', de: ui.selection, vers: cle });
     } else {
-      toast('Destination interdite : distance hexagonale maximale de 2.', 'avertissement');
+      toast(T('toast.mauvaiseDest'), 'avertissement');
     }
     return;
   }
   if (st.reserve[st.joueur] > 0) {
     appliquer({ type: 'placer', cle: cle });
   } else {
-    toast('Réserve vide — cliquez une de vos pierres pour la déplacer.', 'avertissement');
+    toast(T('toast.reserveVideClic'), 'avertissement');
   }
 });
 
@@ -1649,11 +2009,11 @@ document.getElementById('btn-quitter').addEventListener('click', quitterSalon);
 document.getElementById('btn-regles').addEventListener('click', () => {
   document.getElementById('voile-regles').classList.add('visible');
 });
-document.getElementById('fermer-regles').addEventListener('click', () => {
-  document.getElementById('voile-regles').classList.remove('visible');
-});
-document.getElementById('fermer-regles-2').addEventListener('click', () => {
-  document.getElementById('voile-regles').classList.remove('visible');
+// Délégation : « fermer-regles-2 » est recréé à chaque changement de langue.
+document.getElementById('panneau-regles').addEventListener('click', (ev) => {
+  if (ev.target.closest('#fermer-regles, #fermer-regles-2')) {
+    document.getElementById('voile-regles').classList.remove('visible');
+  }
 });
 document.getElementById('voile-regles').addEventListener('click', (ev) => {
   if (ev.target === ev.currentTarget) ev.currentTarget.classList.remove('visible');
@@ -1667,13 +2027,12 @@ window.addEventListener('resize', () => { redimensionner(); majHUD(); });
 
 let mode = 'accueil';        // 'accueil' | 'hotseat' | 'ia' | 'enligne'
 let niveauIA = 'normal';     // 'facile' | 'normal'
-const fileStatut = document.getElementById('accueil-file-statut');
 
 function montrerAccueil(vue) {
+  const enFile = vue === 'file';
   document.getElementById('voile-accueil').classList.add('visible');
-  document.getElementById('accueil-menu').hidden = vue !== 'menu';
-  document.getElementById('accueil-ia').hidden = vue !== 'ia';
-  document.getElementById('accueil-file').hidden = vue !== 'file';
+  document.getElementById('accueil-menu').hidden = enFile;
+  document.getElementById('accueil-file').hidden = !enFile;
 }
 function cacherAccueil() {
   document.getElementById('voile-accueil').classList.remove('visible');
@@ -1683,10 +2042,10 @@ function majEtiquettes() {
   const nA = document.querySelector('#panneau-azur .nom');
   const nC = document.querySelector('#panneau-corail .nom');
   let a = 'AZUR', c = 'CORAIL';
-  if (mode === 'ia') { a = 'AZUR — vous'; c = 'CORAIL — IA'; }
+  if (mode === 'ia') { a = T('etq.iaVous'); c = T('etq.iaIA'); }
   else if (mode === 'enligne' && net.role) {
-    if (net.role === 'azur') { a = 'AZUR — vous, hôte'; c = 'CORAIL — distant'; }
-    else { a = 'AZUR — distant, hôte'; c = 'CORAIL — vous'; }
+    if (net.role === 'azur') { a = T('etq.hoteVous'); c = T('etq.hoteDistantCorail'); }
+    else { a = T('etq.hoteDistantAzur'); c = T('etq.vousCorail'); }
   }
   nA.textContent = a;
   nC.textContent = c;
@@ -1695,7 +2054,7 @@ function majEtiquettes() {
 function majModeHeader() {
   document.getElementById('btn-nouvelle').hidden = (mode === 'enligne');
   document.getElementById('btn-quitter').hidden = (mode !== 'enligne');
-  document.getElementById('btn-rejouer').textContent = (mode === 'enligne') ? 'Quitter le salon' : 'Rejouer';
+  document.getElementById('btn-rejouer').textContent = (mode === 'enligne') ? T('btn.quitter') : T('fin.rejouer');
   majEtiquettes();
   majHUD();
 }
@@ -1716,13 +2075,25 @@ function demarrerHotseat() {
   nouvellePartie();
 }
 
-function demarrerIA(n) {
+function demarrerIA(n, ouvertureAuto) {
   niveauIA = n;
   mode = 'ia';
   majModeHeader();
   cacherAccueil();
   nouvellePartie(true);
-  toast('Vous jouez Azur — l’IA (' + n + ') joue Corail. À vous de commencer.', 'info');
+  toast(T('toast.iaDepart', { niveau: T('niveau.' + n) }), 'info');
+  // Ouverture automatique (capture automatique de l'accueil) : la première
+  // pierre d'Azur — qui commence — est posée pour le joueur peu après le
+  // clic ; l'IA (Corail) répond ensuite (~600 ms). Règles et IA inchangées :
+  // le coup d'ouverture est un placement légal choisi par le même moteur.
+  if (ouvertureAuto) {
+    const monId = idPartie;
+    setTimeout(function () {
+      if (monId !== idPartie || mode !== 'ia' || !ui.state || ui.state.fini || ui.state.joueur !== 'azur') return;
+      const coup = choisirCoupIA(ui.state, 'normal');
+      if (coup) appliquer(coup);
+    }, 450);
+  }
 }
 
 /* =====================================================================
@@ -1823,8 +2194,9 @@ function evaluerCoupIA(st, coup, marq) {
 }
 // #IA-FIN
 
-// Tour de l'IA : pas d'écran de passage, un bandeau « L’IA réfléchit… »
-// pendant ~800 ms, puis coup joué avec les animations normales.
+// Tour de l'IA : pas d'écran de passage, un bandeau « The AI is thinking… »
+// pendant ~600 ms (délai court : la capture automatique de l'accueil montre
+// la réponse), puis coup joué avec les animations normales.
 function planifierIA() {
   const monId = idPartie;
   setTimeout(function () {
@@ -1833,7 +2205,7 @@ function planifierIA() {
     if (!coup) return;
     const journal = jouerAction(ui.state, coup);
     if (!journal.erreur) animerEtApres(journal);
-  }, 800);
+  }, 600);
 }
 
 /* =====================================================================
@@ -1913,7 +2285,7 @@ function envoyerMessage(data, discret) {
   if (!net.connexion) return;
   net.connexion.send(data).catch(function (err) {
     if (err && err.code === 'ROOM_CONNECTION_CLOSED') { connexionPerdue(); return; }
-    if (!discret) toast('Envoi impossible (' + ((err && err.code) || 'erreur') + ').', 'avertissement');
+    if (!discret) toast(T('net.envoiImpossible', { code: (err && err.code) || 'error' }), 'avertissement');
     sonderConnexion();
   });
 }
@@ -1928,17 +2300,17 @@ function sonderConnexion() {
 function connexionPerdue() {
   if (net.perdue || net.quitte) return;
   net.perdue = true;
-  toast('Connexion perdue.', 'avertissement');
-  retourAccueil('Connexion perdue — retour à l’accueil.');
+  toast(T('net.perdue'), 'avertissement');
+  retourAccueil('net.perdueAccueil');
 }
 
 // --- Connexion, élection du plus petit clientId -------------------------
 
 function demarrerEnLigne() {
   montrerAccueil('file');
-  fileStatut.textContent = 'Connexion au salon LOB7…';
+  direFileStatut('file.connexion');
   if (typeof LOB7Rooms !== 'object' || typeof LOB7Rooms.connect !== 'function') {
-    horsLob7('SDK LOB7 introuvable.');
+    horsLob7(T('net.sdk'));
     return;
   }
   sessionReseau++;
@@ -1948,7 +2320,7 @@ function demarrerEnLigne() {
     net.connexion = conn;
     net.monId = idClient();
     net.arret = conn.subscribe(surMessageRoom, { onError: function () { sonderConnexion(); } });
-    fileStatut.textContent = 'Salon rejoint — en attente de l’autre joueur…';
+    direFileStatut('file.attente');
     envoyerMessage({ type: 'hello', clientId: net.monId });
   }).catch(function (err) {
     if (maSession !== sessionReseau) return;
@@ -1959,11 +2331,9 @@ function demarrerEnLigne() {
 // Hors LOB7 (ROOM_PREVIEW_REQUIRED, ROOM_BRIDGE_UNAVAILABLE…) :
 // message dédié et retour à l'accueil.
 function horsLob7(detail) {
-  toast('Le mode en ligne nécessite lob7.com.', 'avertissement');
+  toast(T('net.necessite'), 'avertissement');
   montrerAccueil('menu');
-  document.getElementById('accueil-note').textContent =
-    'Le mode en ligne nécessite lob7.com — ouvrez le jeu depuis son salon lob7.com.' +
-    (detail ? ' (' + detail + ')' : '');
+  noterAccueil('net.note', detail || null);
 }
 
 function surMessageRoom(message) {
@@ -1976,8 +2346,8 @@ function surMessageRoom(message) {
   if (m.type === 'ping') return;
   if (m.type === 'depart') {
     if (m.de === net.autreId) {
-      toast('L’adversaire a quitté le salon.', 'avertissement');
-      retourAccueil('L’adversaire a quitté le salon.');
+      toast(T('net.adversaireParti'), 'avertissement');
+      retourAccueil('net.adversaireParti');
     }
     return;
   }
@@ -2014,11 +2384,11 @@ function demarrerPartieEnLigne() {
     net.numVue = 0;
     envoyerMessage({ type: 'vue', pour: 'corail', de: net.monId, payload: encoderVue(ui.state, 0, null) });
     majHUD();
-    toast('Vous êtes Azur — hôte et arbitre technique. À vous de commencer.', 'info');
+    toast(T('net.vousHote'), 'info');
   } else {
     net.numVue = -1;
     montrerAccueil('file');
-    fileStatut.textContent = 'Vous êtes Corail — l’hôte (Azur) prépare la partie…';
+    direFileStatut('file.corail');
   }
   activerVeilleReseau();
 }
@@ -2054,7 +2424,7 @@ function surActionDistante(m) {
   if (ui.state.fini || ui.state.joueur !== 'corail') { resynchroniserCorail(); return; }
   const journal = jouerAction(ui.state, m.coup);
   if (journal.erreur) {
-    toast('Coup distant refusé : ' + journal.erreur, 'avertissement');
+    toast(T('net.coupRefuse', { msg: T('err.' + journal.erreur) }), 'avertissement');
     resynchroniserCorail();
     return;
   }
@@ -2104,11 +2474,11 @@ function quitterSalon() {
   if (net.connexion && net.demarree) {
     envoyerMessage({ type: 'depart', de: net.monId }, true);   // prévenir l'autre joueur
   }
-  toast('Vous avez quitté le salon.', 'info');
-  retourAccueil('');
+  toast(T('net.sorti'), 'info');
+  retourAccueil(null);
 }
 
-function retourAccueil(message) {
+function retourAccueil(cleNote) {
   sessionReseau++;
   if (net.arret) { try { net.arret(); } catch (e) { /* abonnement déjà arrêté */ } }
   reinitialiserNet();
@@ -2116,17 +2486,16 @@ function retourAccueil(message) {
   majModeHeader();
   nouvellePartie(true);
   montrerAccueil('menu');
-  document.getElementById('accueil-note').textContent = message || '';
+  noterAccueil(cleNote || null);
 }
 
-/* ---------- Câblage des boutons de l'accueil ---------- */
+/* ---------- Câblage des boutons de l'accueil et de la langue ---------- */
+document.getElementById('btn-langue').addEventListener('click', () => definirLangue(langue === 'en' ? 'fr' : 'en'));
 document.getElementById('btn-hotseat').addEventListener('click', demarrerHotseat);
-document.getElementById('btn-ia').addEventListener('click', () => montrerAccueil('ia'));
-document.getElementById('btn-ia-facile').addEventListener('click', () => demarrerIA('facile'));
-document.getElementById('btn-ia-normal').addEventListener('click', () => demarrerIA('normal'));
-document.getElementById('btn-ia-retour').addEventListener('click', () => montrerAccueil('menu'));
+document.getElementById('btn-ia').addEventListener('click', () => demarrerIA('normal', true));
+document.getElementById('btn-ia-facile').addEventListener('click', () => demarrerIA('facile', false));
 document.getElementById('btn-enligne').addEventListener('click', demarrerEnLigne);
-document.getElementById('btn-annuler-file').addEventListener('click', () => retourAccueil(''));
+document.getElementById('btn-annuler-file').addEventListener('click', () => retourAccueil(null));
 document.getElementById('btn-regles-accueil').addEventListener('click', () => {
   document.getElementById('voile-regles').classList.add('visible');
 });
@@ -2137,6 +2506,7 @@ document.getElementById('btn-regles-accueil').addEventListener('click', () => {
 
 Assets.init();
 redimensionner();
+majTextesStatiques();   // i18n : textes statiques (anglais par défaut, ou préférence)
 nouvellePartie(true);   // archipel vivant en fond derrière l'écran d'accueil
 montrerAccueil('menu');
 majModeHeader();
