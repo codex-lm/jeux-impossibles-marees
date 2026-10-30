@@ -2,7 +2,7 @@
   "title": "Marées",
   "description": "A moving Go on a sinking archipelago. Place and shift stones to capture by enclosure while eighteen tides devour the atoll — and the forecast only ever shows three events ahead. Play hotseat, against an honest AI, or online with a friend in a LOB7 room.",
   "entrypoint": "index.html",
-  "license": "CC BY-SA 4.0",
+  "license": "MIT",
   "controls": [
     "Click a free cell to place a stone from your reserve, or click a stone then a highlighted cell to move it (up to two cells).",
     "Stones with at least four of their existing neighbours held by the opponent are captured.",
